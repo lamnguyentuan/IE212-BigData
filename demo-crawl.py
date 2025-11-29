@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 import yt_dlp
 
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -245,6 +246,21 @@ class TikTokScraper:
                     const tagElements = document.querySelectorAll('a[data-e2e="search-common-link"]');
                     return Array.from(tagElements).map(el => el.textContent.trim());
                 };
+                const getDescription = () => {
+                    const selectors = [
+                    'span[data-e2e^="desc-span"]',        
+                    '[data-e2e="browse-video-desc"]',     
+                    'div[data-e2e="browse-video-desc"] span'
+                ];
+
+                for (const sel of selectors) {
+                    const el = document.querySelector(sel);
+                    if (el && el.textContent.trim()) {
+                    return el.textContent.trim();
+                    }
+                }
+                return 'N/A';
+                };
 
                 return {
                     likes: getTextContent(['[data-e2e="like-count"]', '[data-e2e="browse-like-count"]']),
@@ -252,7 +268,7 @@ class TikTokScraper:
                     shares: getTextContent(['[data-e2e="share-count"]']),
                     bookmarks: getTextContent(['[data-e2e="undefined-count"]']),
                     views: getTextContent(['[data-e2e="video-views"]']),
-                    description: getTextContent(['span[data-e2e="new-desc-span"]']),
+                    description: getDescription(),
                     musicTitle: getTextContent(['.css-pvx3oa-DivMusicText']),
                     date: getTextContent(['span[data-e2e="browser-nickname"] span:last-child']),
                     author: getTextContent(['a[data-e2e="video-author-uniqueid"]']),
@@ -443,29 +459,30 @@ async def main():
     # TEST CRAWL 10 VIDEO THEO HASHTAG
     # -------------------------
     hashtag = ["xuhuong"]   # sửa hashtag tùy ý: "golf", "football", "coding", ...
-    max_videos = 2      # chỉ crawl tối đa 10 video để thử nghiệm
+    max_videos = 1      # chỉ crawl tối đa 10 video để thử nghiệm
 
+# Previously a triple-quoted block was used to skip the hashtag loop; convert it to comments
     for tag in hashtag:
-        video_data_list = await scraper.scrape_hashtag(
-            tag,
-            max_videos=max_videos
-        )
-        if video_data_list:
-            out_file = f"tiktok_{tag}_videos.json"
-            scraper.save_results(video_data_list, filename=out_file)
-            logging.info(
-                f"\nScraping completed for #{tag}. "
-                f"Total videos collected: {len(video_data_list)}"
-            )
-        else:
-            logging.error(f"Failed to scrape videos for #{tag}")
+     video_data_list = await scraper.scrape_hashtag(
+         tag,
+         max_videos=max_videos
+     )
+    if video_data_list:
+         out_file = f"tiktok_{tag}_videos.json"
+         scraper.save_results(video_data_list, filename=out_file)
+         logging.info(
+             f"\nScraping completed for #{tag}. "
+             f"Total videos collected: {len(video_data_list)}"
+         )
+    else:
+         logging.error(f"Failed to scrape videos for #{tag}")
     # -------------------------
     # NẾU MUỐN TEST 1 VIDEO CỤ THỂ, BẬT ĐOẠN NÀY:
     # -------------------------
     #video_url = "https://vt.tiktok.com/ZSfdoKbN1/"
     #video_data = await scraper.scrape_single_video(video_url)
-   # if video_data:
-       #  scraper.save_results(video_data, filename="tiktok_single_video.json")
+    #if video_data:
+        # scraper.save_results(video_data, filename="tiktok_single_video.json")
     # -------------------------
 
 
