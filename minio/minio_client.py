@@ -1,6 +1,10 @@
 from minio import Minio
 import yaml
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE = Path(__file__).parent
 
@@ -12,7 +16,7 @@ def get_minio_client(config_name: str = "config_tiktok.yaml"):
     client = Minio(
         cfg["endpoint"],
         access_key=cfg["access_key"],
-        secret_key=cfg["secret_key"],
+        secret_key=os.getenv("MINIO_SECRET_KEY"),
         secure=cfg["secure"],
     )
 
