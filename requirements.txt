@@ -1,0 +1,3 @@
+playwright
+yt-dlp
+minio
