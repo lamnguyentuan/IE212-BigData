@@ -1,0 +1,36 @@
+# =====================================================
+# TikTok Crawler Configuration File
+# =====================================================
+
+# ====== Playwright Settings ======
+timeout_ms: 10000            # Thời gian chờ selectors (ms)
+viewport_width: 1280
+viewport_height: 720
+
+# ====== Crawl Behavior ======
+max_comments_rounds: 20       # Số vòng scroll/comment load
+min_sleep_sec: 1.0            # Trễ nhỏ nhất
+max_sleep_sec: 3.0            # Trễ lớn nhất
+download_video: true          # Có tải video hay không
+
+# ====== Hashtag Settings ======
+hashtags:                     # Danh sách hashtag để crawl
+  - xuhuong
+  - fyp
+  - sport
+  - foryou
+  - funny
+  # - dancechallenge
+  # - fun
+  # - cute
+  # - music
+  # - besttiktok
+max_videos_per_hashtag: 5    # Mỗi hashtag crawl bao nhiêu video
+
+# ====== MinIO Settings ======
+minio_config: "config_tiktok.yaml"
+
+# ====== Output ======
+export_dir: "exports"
+log_file: "logs/tiktok_scraper.log"
+tmp_download_dir: "tmp_downloads"
