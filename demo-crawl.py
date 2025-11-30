@@ -1,13 +1,7 @@
 try:
     from playwright.async_api import async_playwright
 except Exception as e:
-    raise ImportError(
-        "Playwright could not be imported. Install it with:\n"
-        "  pip install playwright\n"
-        "and then run:\n"
-        "  playwright install\n"
-        "If you're using a virtual environment, ensure it's activated."
-    ) from e
+    raise ImportError("Playwright import failed.") from e
 
 import asyncio
 import random
@@ -15,10 +9,10 @@ import json
 import logging
 import time
 import os
-from urllib.parse import urlparse
-
+import io  # >>> NEW: Dùng để xử lý file trong RAM
+from minio import Minio  # >>> NEW: Thư viện MinIO
 import yt_dlp
-
+from urllib.parse import urlparse
 
 # Configure logging
 logging.basicConfig(
@@ -45,12 +39,29 @@ class TikTokScraper:
         )
         self.VIEWPORT = {'width': 1280, 'height': 720}
         self.TIMEOUT = 300  # seconds (5 minutes)
+        # =========================
+        # >>> NEW: CẤU HÌNH MINIO
+        # =========================
+        self.minio_client = Minio(
+            "localhost:9000",             # Địa chỉ MinIO (IP server hoặc localhost)
+            access_key="minioadmin",      # User
+            secret_key="123456789@",      # Pass
+            secure=False                  # False nếu chạy localhost http
+        )
+        self.bucket_name = "tiktok-data"
+        
+        # Tạo bucket nếu chưa có
+        if not self.minio_client.bucket_exists(self.bucket_name):
+            self.minio_client.make_bucket(self.bucket_name)
+            logging.info(f"Created bucket: {self.bucket_name}")
 
     async def random_sleep(self, min_seconds=1, max_seconds=3):
         """Random delay to look more 'human'."""
         delay = random.uniform(min_seconds, max_seconds)
         logging.info(f"Sleeping for {delay:.2f} seconds...")
         await asyncio.sleep(delay)
+
+        
 
     async def handle_captcha(self, page):
         """Handling verification codes / CAPTCHA."""
@@ -292,32 +303,59 @@ class TikTokScraper:
         except Exception as e:
             logging.error(f"Failed to extract info from {video_url}: {str(e)}")
             return None
+    # =========================
+    # >>> NEW: HÀM UPLOAD VIDEO LÊN MINIO
+    # =========================
+    def upload_file_to_minio(self, local_path, object_name):
+        """Upload file từ ổ cứng lên MinIO rồi xóa file gốc"""
+        try:
+            self.minio_client.fput_object(
+                self.bucket_name, 
+                object_name, 
+                local_path
+            )
+            logging.info(f"Uploaded to MinIO: {object_name}")
+            
+            # Xóa file local để tiết kiệm ổ cứng
+            os.remove(local_path)
+            return f"s3://{self.bucket_name}/{object_name}"
+        except Exception as e:
+            logging.error(f"MinIO Upload Error: {e}")
+            return None        
 
-    def download_video(self, video_url):
-        """Download video using yt_dlp."""
+    def download_video(self, video_url, video_id):
+        """
+        Download bằng yt_dlp -> Upload MinIO -> Xóa Local
+        """
         if not os.path.exists(self.SAVE_DIR):
             os.makedirs(self.SAVE_DIR)
 
+        # Đặt tên file theo ID để dễ quản lý
+        filename_template = os.path.join(self.SAVE_DIR, f"{video_id}.%(ext)s")
+
         ydl_opts = {
-            'outtmpl': os.path.join(self.SAVE_DIR, '%(id)s.%(ext)s'),
+            'outtmpl': filename_template,
             'format': 'best',
-            'quiet': False,
-            'no_warnings': False,
+            'quiet': True,
             'ignoreerrors': True
         }
-
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
                 if not info:
-                    logging.error("yt_dlp did not return info for this video.")
                     return None
-                filename = ydl.prepare_filename(info)
-                logging.info(f"Video successfully downloaded: {filename}")
-                return filename
+                # Lấy tên file thực tế đã tải về (thường là .mp4)
+                local_filename = ydl.prepare_filename(info)
+                
+                # >>> UPLOAD LÊN MINIO (Cấu trúc: bronze/video_id/video.mp4)
+                minio_path = f"bronze/{video_id}/video.mp4"
+                s3_path = self.upload_file_to_minio(local_filename, minio_path)
+                
+                return s3_path
+
         except Exception as e:
             logging.error(f"Error downloading video: {str(e)}")
-            return None
+            return None               
 
     async def scrape_single_video(self, video_url):
         """Scrape a single TikTok video by its direct URL."""
@@ -349,6 +387,29 @@ class TikTokScraper:
                 await browser.close()
 
             return result
+# =========================
+    # >>> NEW: HÀM LƯU JSON TRỰC TIẾP LÊN MINIO
+    # =========================
+    def save_to_minio(self, data, object_name):
+        """Lưu metadata dạng JSON lên MinIO (không cần lưu file tạm)"""
+        try:
+            # Chuyển dict thành bytes
+            json_bytes = json.dumps(data, indent=2, ensure_ascii=False).encode('utf-8')
+            json_stream = io.BytesIO(json_bytes)
+            
+            # Cấu trúc: bronze/video_id/metadata.json
+            #object_name = f"bronze/{video_id}/metadata.json"
+            
+            self.minio_client.put_object(
+                self.bucket_name,
+                object_name,
+                data=json_stream,
+                length=len(json_bytes),
+                content_type='application/json'
+            )
+            logging.info(f"Metadata saved to MinIO: {object_name}")
+        except Exception as e:
+            logging.error(f"Error saving JSON to MinIO: {e}")
 
     async def collect_video_urls_by_hashtag(self, page, hashtag, max_videos=20):
         """
@@ -430,10 +491,16 @@ class TikTokScraper:
                         )
                         continue
 
+                    try:
+                        video_id = video_url.split('video/')[-1].split('?')[0]
+                    except:
+                        video_id = f"vid_{int(time.time())}"
+
                     if self.DOWNLOAD_VIDEO:
-                        filename = self.download_video(video_url)
-                        if filename:
-                            video_info["local_path"] = filename
+                        s3_path = self.download_video(video_url, video_id)
+                        if s3_path:
+                            video_info["local_path"] = s3_path
+                    self.save_to_minio(video_info, f"bronze/{video_id}/metadata.json")
 
                     results.append(video_info)
                     await self.random_sleep(1, 3)
@@ -458,7 +525,7 @@ async def main():
     # -------------------------
     # TEST CRAWL 10 VIDEO THEO HASHTAG
     # -------------------------
-    hashtag = ["xuhuong"]   # sửa hashtag tùy ý: "golf", "football", "coding", ...
+    hashtag = ["xuhuong", "fyp"]   # sửa hashtag tùy ý: "golf", "football", "coding", ...
     max_videos = 1      # chỉ crawl tối đa 10 video để thử nghiệm
 
 # Previously a triple-quoted block was used to skip the hashtag loop; convert it to comments
