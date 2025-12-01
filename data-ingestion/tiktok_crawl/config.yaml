@@ -15,17 +15,32 @@ download_video: true          # Có tải video hay không
 
 # ====== Hashtag Settings ======
 hashtags:                     # Danh sách hashtag để crawl
-  - xuhuong
-  - fyp
-  - sport
-  - foryou
-  - funny
+  - livefest2025
+  - vannghe2011
+  - quoctedanong
+  - truytimlongdienhuong
+  - bavi
+  - mailisa
+  - 19thang11
+  - quanglinhvlog
+  - thuytien
+  - salegiuathang
+  - huonggiang
+  - hangdumuc
+  - missuniverse
+  - lulut
+  - hocsinhcap3
+  # - funny
+  # - foryou
+  # - xuhuong
+  # - fyp
+  # - sport
   # - dancechallenge
   # - fun
   # - cute
   # - music
   # - besttiktok
-max_videos_per_hashtag: 5    # Mỗi hashtag crawl bao nhiêu video
+max_videos_per_hashtag: 1    # Mỗi hashtag crawl bao nhiêu video
 
 # ====== MinIO Settings ======
 minio_config: "config_tiktok.yaml"
