@@ -1,7 +1,4 @@
 # **TikTok Harmful Content Detection – Multimodal + Big Data Pipeline**
-
-### **(MinIO Storage + Medallion Architecture)**
-
 ---
 
 ## 🧩 **1. Giới thiệu dự án**

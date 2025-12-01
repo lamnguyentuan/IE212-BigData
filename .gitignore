@@ -1,4 +1,96 @@
-.env
+# Python Cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.ipynb_checkpoints/
+
+# virtual env
+env/
+venv/
+.genai-env/
+.genai-env*/
+genai-env/
+
+# Playwright + Chromium cache
+playwright/.cache/
+playwright/python/.cache/
+browser_contexts/
+playwright-report/
+test-results/
+webkit/
+chromium/
+ffmpeg/
+
+# Logs
+logs/
+*.log
+
+# MinIO local storage
+minio-data/
+
+# Large data / Outputs / Temporary data
+offline-training/datasets/
+offline-training/artifacts/
+offline-training/datasets/**
+
+tmp/
+tmp_downloads/
+temp/
+tmp_*/
+
+exports/
+
+# TikTok cookies or credentials
 cookies-tiktok.txt
-tiktok_fyp_videos.json
-tiktok_scraper.log
+*.cookies.txt
+*.token
+*.secrets
+*.env
+.env*
+
+
+# OS garbage
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE files
+.vscode/
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+
+# Spark / Hadoop / Kafka generated files
+spark-warehouse/
+metastore_db/
+derby.log
+*.crc
+*.avro.tmp
+*.parquet.crc
+data-pipeline/tmp/
+data-pipeline/checkpoints/
+data-pipeline/spark-streaming/checkpoints/
+
+# Docker
+*.pid
+*.pid.lock
+*.sock
+docker/logs/
+
+# Node / UI (if dashboard uses extra front-end libs)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+
+# Model weights (too big to commit)
+*.pt
+*.pth
+*.ckpt
+*.bin
+model-serving/artifacts/
+offline-training/artifacts/
