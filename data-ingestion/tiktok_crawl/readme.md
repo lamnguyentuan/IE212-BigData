@@ -4,6 +4,12 @@ Thư mục **`tiktok_crawl/`** chứa toàn bộ mã nguồn phục vụ **thu t
 Đây là bước đầu tiên của pipeline Big Data trong dự án IE212 — tạo nguồn dữ liệu cho giai đoạn xử lý, tiền xử lý và huấn luyện mô hình.
 
 ---
+### Tóm tắt
+- `config.yaml`: toàn bộ thông số được đặt ở đây cho dễ thay đổi
+- `downloaded_videos`: ID của các video đã download, mỗi lần crawl thì kiểm tra để tránh crawl trùng
+- `tiktok_scraper.py`: logic crawl chính. Muốn crawl thì chạy file này,  
+
+---
 
 # ⚙️ 1. Chức năng chính
 

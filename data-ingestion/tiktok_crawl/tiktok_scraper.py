@@ -77,6 +77,18 @@ class TikTokScraper:
         self.MAX_SLEEP: float = float(self.cfg.get("max_sleep_sec", 3.0))
         self.DOWNLOAD_VIDEO: bool = bool(self.cfg.get("download_video", True))
 
+        # Giới hạn comment
+        self.MAX_TOTAL_COMMENTS: int = int(self.cfg.get("max_total_comments", 200))
+        self.MAX_REPLIES_PER_COMMENT: int = int(
+            self.cfg.get("max_replies_per_comment", 15)
+        )
+
+        # Captcha
+        self.CAPTCHA_MAX_WAIT_SEC: int = int(self.cfg.get("captcha_max_wait_sec", 300))
+        self.CAPTCHA_POLL_INTERVAL_SEC: float = float(
+            self.cfg.get("captcha_poll_interval_sec", 5.0)
+        )
+
         # Hashtags
         self.HASHTAGS: List[str] = list(self.cfg.get("hashtags", []))
         self.MAX_VIDEOS: int = int(self.cfg.get("max_videos_per_hashtag", 10))
@@ -141,6 +153,11 @@ class TikTokScraper:
             f"[STATE] Downloaded IDs file: {self.DOWNLOADED_IDS_FILE} "
             f"({len(self.downloaded_ids)} IDs loaded)"
         )
+        logging.info(
+            f"[COMMENTS] MAX_TOTAL_COMMENTS={self.MAX_TOTAL_COMMENTS}, "
+            f"MAX_REPLIES_PER_COMMENT={self.MAX_REPLIES_PER_COMMENT}, "
+            f"MAX_COMMENT_ROUNDS={self.MAX_COMMENT_ROUNDS}"
+        )
 
     # ---------------------------------------------------------------------
     # Quản lý danh sách video_id đã xử lý
@@ -187,19 +204,73 @@ class TikTokScraper:
     # ---------------------------------------------------------------------
     async def _handle_captcha(self, page: Page) -> None:
         """
-        Nếu TikTok hiện dialog CAPTCHA / verification thì chờ user solve.
+        Nếu TikTok redirect sang trang verify/captcha,
+        cho user thời gian giải tay rồi mới crawl tiếp.
+
+        Nhận diện:
+        - HTML chứa 'captcha' / 'verify you are human'
+        - VÀ không thấy các selector nội dung chính (link video, like-count)
         """
         try:
-            captcha_dialog = page.locator('div[role="dialog"]')
-            if await captcha_dialog.count() > 0 and await captcha_dialog.is_visible():
-                logging.warning("CAPTCHA detected. Solve it manually in the browser...")
-                await page.wait_for_selector(
-                    'div[role="dialog"]',
-                    state="detached",
-                    timeout=self.TIMEOUT * 2000,
+            # Nếu đã có dấu hiệu trang "bình thường" thì bỏ qua captcha
+            try:
+                video_link = await page.query_selector('a[href*="/video/"]')
+                like_count = await page.query_selector('[data-e2e="like-count"]')
+                if video_link or like_count:
+                    return
+            except Exception:
+                pass
+
+            html = (await page.content()).lower()
+
+            if (
+                "captcha" not in html
+                and "verify you are human" not in html
+            ):
+                # Không thấy dấu hiệu captcha → không làm gì
+                return
+
+            logging.warning(
+                f"[CAPTCHA] Possible verify/captcha page detected (url={page.url}). "
+                "Please solve it manually in the browser window."
+            )
+
+            waited = 0.0
+            while waited < self.CAPTCHA_MAX_WAIT_SEC:
+                await asyncio.sleep(self.CAPTCHA_POLL_INTERVAL_SEC)
+                waited += self.CAPTCHA_POLL_INTERVAL_SEC
+
+                try:
+                    html = (await page.content()).lower()
+                    video_link = await page.query_selector('a[href*="/video/"]')
+                    like_count = await page.query_selector('[data-e2e="like-count"]')
+                except Exception:
+                    # Nếu lỗi khi đọc page, cứ thử lại vòng sau
+                    continue
+
+                still_captcha = (
+                    "captcha" in html or "verify you are human" in html
                 )
-                logging.info("CAPTCHA solved. Continue scraping...")
+                has_content = bool(video_link or like_count)
+
+                if still_captcha and not has_content:
+                    remaining = int(self.CAPTCHA_MAX_WAIT_SEC - waited)
+                    logging.info(
+                        f"[CAPTCHA] Still on verify/captcha page. "
+                        f"Waiting... (~{max(remaining, 0)}s left)"
+                    )
+                    continue
+
+                # Hoặc không còn chữ captcha, hoặc đã thấy selector nội dung chính
+                logging.info("[CAPTCHA] Captcha/verify seems solved. Continue scraping...")
                 await self._random_sleep()
+                return
+
+            logging.warning(
+                "[CAPTCHA] Timeout waiting for captcha to be solved. "
+                "Continuing anyway; page may still be blocked."
+            )
+
         except Exception as e:
             logging.error(f"Error handling CAPTCHA: {e}")
 
@@ -228,41 +299,31 @@ class TikTokScraper:
 
     async def _expand_all_replies(self, page: Page) -> None:
         """
-        Click tất cả nút 'View replies' trong DivViewRepliesContainer
-        cho đến khi không còn nút nào còn chữ 'view'.
+        Click các nút 'View replies' trong DivViewRepliesContainer.
+        Không loop vô hạn, mỗi vòng scroll sẽ gọi 1 lần.
         """
         try:
-            while True:
-                containers = page.locator("div[class*='DivViewRepliesContainer']")
-                count = await containers.count()
+            containers = page.locator("div[class*='DivViewRepliesContainer']")
+            count = await containers.count()
+            if count == 0:
+                return
 
-                if count == 0:
-                    break
+            logging.info(f"Found {count} reply containers in this round")
 
-                logging.info(f"Found {count} reply containers")
-                clickable_indices: List[int] = []
+            for i in range(count):
+                try:
+                    text = (await containers.nth(i).inner_text()).strip().lower()
+                except Exception:
+                    continue
 
-                for i in range(count):
-                    try:
-                        text = (await containers.nth(i).inner_text()).strip().lower()
-                    except Exception:
-                        continue
+                if "view" not in text:
+                    continue
 
-                    if "view" in text:
-                        clickable_indices.append(i)
-
-                if not clickable_indices:
-                    logging.info("No more 'View ... replies' spans found.")
-                    break
-
-                for idx in clickable_indices:
-                    try:
-                        await containers.nth(idx).click()
-                        await self._random_sleep()
-                    except Exception as e:
-                        logging.debug(f"Failed to click reply span idx={idx}: {e}")
-
-                await self._random_sleep()
+                try:
+                    await containers.nth(i).click()
+                    await self._random_sleep()
+                except Exception as e:
+                    logging.debug(f"Failed to click reply span idx={i}: {e}")
 
         except Exception as e:
             logging.error(f"Error in _expand_all_replies: {e}")
@@ -272,59 +333,131 @@ class TikTokScraper:
         Crawl comment TikTok dạng cây:
         - comment-level-1: comment gốc
         - comment-level-2: reply của comment gần nhất
+
+        Giới hạn:
+        - Mỗi comment level 1: tối đa self.MAX_REPLIES_PER_COMMENT reply
+        - Tổng số comment (level1 + level2): tối đa self.MAX_TOTAL_COMMENTS
         """
         await self._open_comments_panel(page)
 
-        # Scroll nhiều lần để load thêm comment + mở reply
-        for _ in range(self.MAX_COMMENT_ROUNDS):
+        # Scroll nhiều lần để load thêm comment + mở reply,
+        # nhưng dừng sớm nếu tổng số comment trong DOM đã đủ.
+        for round_idx in range(self.MAX_COMMENT_ROUNDS):
+            logging.info(f"[COMMENTS] Scroll round {round_idx + 1}/{self.MAX_COMMENT_ROUNDS}")
             try:
                 await page.mouse.wheel(0, 1500)
-            except Exception:
+            except Exception as e:
+                logging.error(f"Error while scrolling comments: {e}")
                 break
+
             await self._expand_all_replies(page)
             await self._random_sleep()
 
+            # Đếm số comment node (level1 + level2) đang có trong DOM
+            try:
+                total_nodes = await page.evaluate(
+                    """
+                    () => {
+                        const nodes = document.querySelectorAll('span[data-e2e^="comment-level"]');
+                        return nodes.length;
+                    }
+                    """
+                )
+            except Exception as e:
+                logging.error(f"Error counting comments in DOM: {e}")
+                total_nodes = 0
+
+            logging.info(
+                f"[COMMENTS] DOM currently has {total_nodes} comment nodes "
+                f"(limit={self.MAX_TOTAL_COMMENTS})"
+            )
+
+            if isinstance(total_nodes, int) and total_nodes >= self.MAX_TOTAL_COMMENTS:
+                logging.info(
+                    "[COMMENTS] Reached MAX_TOTAL_COMMENTS in DOM, stop scrolling further."
+                )
+                break
+
         # Chờ ít nhất 1 comment top-level
         try:
-            await page.wait_for_selector('span[data-e2e*="comment-level-1"]', timeout=self.TIMEOUT)
+            await page.wait_for_selector(
+                'span[data-e2e*="comment-level-1"]', timeout=self.TIMEOUT
+            )
         except Exception:
             logging.error("No top-level comments found after scrolling.")
             return []
 
+        # Xây dựng cây comment với giới hạn:
+        # - Mỗi root: tối đa MAX_REPLIES_PER_COMMENT replies
+        # - Tổng: tối đa MAX_TOTAL_COMMENTS nodes
         try:
+            max_total = self.MAX_TOTAL_COMMENTS
+            max_replies = self.MAX_REPLIES_PER_COMMENT
+
             comments_tree = await page.evaluate(
-                """
-                () => {
+                f"""
+                () => {{
+                    const MAX_TOTAL = {max_total};
+                    const MAX_REPLIES = {max_replies};
+
                     const nodes = Array.from(
                         document.querySelectorAll('span[data-e2e^="comment-level"]')
                     );
                     const tree = [];
                     let current = null;
+                    let totalCount = 0;
 
-                    nodes.forEach(n => {
-                        const levelAttr = n.getAttribute("data-e2e") || "";
+                    const getTextForNode = (n) => {{
                         const textEl =
                             n.querySelector('[data-e2e="comment-content"]') ||
                             n.querySelector("span");
-                        const text = textEl ? textEl.textContent.trim() : "";
+                        return textEl ? textEl.textContent.trim() : "";
+                    }};
 
-                        if (!text) return;
+                    for (const n of nodes) {{
+                        if (totalCount >= MAX_TOTAL) {{
+                            break;
+                        }}
 
-                        if (levelAttr.includes("comment-level-1")) {
-                            current = { text, replies: [] };
+                        const levelAttr = n.getAttribute("data-e2e") || "";
+                        const text = getTextForNode(n);
+
+                        if (!text) continue;
+
+                        if (levelAttr.includes("comment-level-1")) {{
+                            // Comment gốc
+                            current = {{
+                                text,
+                                replies: []
+                            }};
                             tree.push(current);
-                        } else if (levelAttr.includes("comment-level-2")) {
-                            if (current) {
-                                current.replies.push({ text });
-                            }
-                        }
-                    });
+                            totalCount += 1;
+
+                            if (totalCount >= MAX_TOTAL) {{
+                                break;
+                            }}
+                        }} else if (levelAttr.includes("comment-level-2")) {{
+                            // Reply cho comment gần nhất
+                            if (current && current.replies.length < MAX_REPLIES) {{
+                                current.replies.push({{ text }});
+                                totalCount += 1;
+
+                                if (totalCount >= MAX_TOTAL) {{
+                                    break;
+                                }}
+                            }}
+                        }}
+                    }}
 
                     return tree;
-                }
+                }}
                 """
             )
-            logging.info(f"Comment tree collected, root comments: {len(comments_tree)}")
+
+            logging.info(
+                f"Comment tree collected. Root comments: {len(comments_tree)} "
+                f"(max_total={self.MAX_TOTAL_COMMENTS}, max_replies_per_root={self.MAX_REPLIES_PER_COMMENT})"
+            )
             return comments_tree
 
         except Exception as e:
@@ -341,7 +474,11 @@ class TikTokScraper:
         logging.info(f"Extracting info from: {video_url}")
 
         try:
-            await page.goto(video_url, wait_until="networkidle")
+            await page.goto(
+                video_url,
+                wait_until="domcontentloaded",
+                timeout=self.TIMEOUT,
+            )
             await self._random_sleep()
             await self._handle_captcha(page)
 
@@ -558,7 +695,11 @@ class TikTokScraper:
         hashtag_url = f"https://www.tiktok.com/tag/{hashtag_clean}"
         logging.info(f"Opening hashtag page: {hashtag_url}")
 
-        await page.goto(hashtag_url, wait_until="networkidle")
+        await page.goto(
+            hashtag_url,
+            wait_until="domcontentloaded",
+            timeout=self.TIMEOUT,
+        )
         await self._random_sleep()
         await self._handle_captcha(page)
 
