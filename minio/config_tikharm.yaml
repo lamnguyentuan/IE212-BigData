@@ -1,0 +1,4 @@
+endpoint: "localhost:9000"
+access_key: "minioadmin"
+secure: false
+bucket: "tikharm"
