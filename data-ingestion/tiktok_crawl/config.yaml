@@ -12,6 +12,13 @@ max_comments_rounds: 20       # Số vòng scroll/comment load
 min_sleep_sec: 1.0            # Trễ nhỏ nhất
 max_sleep_sec: 3.0            # Trễ lớn nhất
 download_video: true          # Có tải video hay không
+max_total_comments : 200      # Tổng số lượng comment
+max_replies_per_comment : 15  # Số lượng replies tối đa mỗi cmt level 1
+
+# ====== CAPTCHA ==========
+captcha_max_wait_sec: 300          # tối đa 5 phút chờ bạn giải
+captcha_poll_interval_sec: 5.0     # mỗi 5s check lại một lần
+
 
 # ====== Hashtag Settings ======
 hashtags:                     # Danh sách hashtag để crawl
