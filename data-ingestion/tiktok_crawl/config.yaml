@@ -64,7 +64,7 @@ hashtags:                     # Danh sách hashtag để crawl
   # - cute
   # - music
   # - besttiktok
-max_videos_per_hashtag: 5    # Mỗi hashtag crawl bao nhiêu video
+max_videos_per_hashtag: 20    # Mỗi hashtag crawl bao nhiêu video
 
 # ====== MinIO Settings ======
 minio_config: "config_tiktok.yaml"

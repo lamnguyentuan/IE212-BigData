@@ -327,8 +327,43 @@ class TikTokScraper:
 
         except Exception as e:
             logging.error(f"Error in _expand_all_replies: {e}")
+    
+    def _parse_count(self, text: str) -> Optional[int]:
+        """
+        Parse chuỗi số lượng comment/like dạng:
+        - '123'
+        - '1,234'
+        - '1.2K', '3.4M', '2B'
+        Trả về int hoặc None nếu không parse được.
+        """
+        if not text or text == "N/A":
+            return None
 
-    async def _collect_comments_tree(self, page: Page) -> List[Dict[str, Any]]:
+        s = text.strip().lower().replace(",", "")
+        multiplier = 1
+
+        if s.endswith("k"):
+            multiplier = 1_000
+            s = s[:-1]
+        elif s.endswith("m"):
+            multiplier = 1_000_000
+            s = s[:-1]
+        elif s.endswith("b"):
+            multiplier = 1_000_000_000
+            s = s[:-1]
+
+        try:
+            value = float(s)
+            return int(value * multiplier)
+        except ValueError:
+            return None
+
+
+    async def _collect_comments_tree(
+        self,
+        page: Page,
+        expected_total_comments: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
         """
         Crawl comment TikTok dạng cây:
         - comment-level-1: comment gốc
@@ -337,6 +372,7 @@ class TikTokScraper:
         Giới hạn:
         - Mỗi comment level 1: tối đa self.MAX_REPLIES_PER_COMMENT reply
         - Tổng số comment (level1 + level2): tối đa self.MAX_TOTAL_COMMENTS
+        - Nếu số comment trong DOM >= tổng comment của video -> dừng scroll sớm
         """
         await self._open_comments_panel(page)
 
@@ -369,14 +405,24 @@ class TikTokScraper:
 
             logging.info(
                 f"[COMMENTS] DOM currently has {total_nodes} comment nodes "
-                f"(limit={self.MAX_TOTAL_COMMENTS})"
+                f"(limit={self.MAX_TOTAL_COMMENTS}, expected_total={expected_total_comments})"
             )
 
-            if isinstance(total_nodes, int) and total_nodes >= self.MAX_TOTAL_COMMENTS:
-                logging.info(
-                    "[COMMENTS] Reached MAX_TOTAL_COMMENTS in DOM, stop scrolling further."
-                )
-                break
+            if isinstance(total_nodes, int):
+                # ✅ Nếu số comment trong DOM đã >= tổng số comment video -> dừng luôn
+                if expected_total_comments is not None and total_nodes >= expected_total_comments:
+                    logging.info(
+                        f"[COMMENTS] Reached all comments of video "
+                        f"({total_nodes}/{expected_total_comments}), stop scrolling."
+                    )
+                    break
+
+                # Giới hạn bảo vệ MAX_TOTAL_COMMENTS
+                if total_nodes >= self.MAX_TOTAL_COMMENTS:
+                    logging.info(
+                        "[COMMENTS] Reached MAX_TOTAL_COMMENTS in DOM, stop scrolling further."
+                    )
+                    break
 
         # Chờ ít nhất 1 comment top-level
         try:
@@ -386,6 +432,7 @@ class TikTokScraper:
         except Exception:
             logging.error("No top-level comments found after scrolling.")
             return []
+
 
         # Xây dựng cây comment với giới hạn:
         # - Mỗi root: tối đa MAX_REPLIES_PER_COMMENT replies
@@ -537,11 +584,21 @@ class TikTokScraper:
             )
 
             try:
-                comments = await self._collect_comments_tree(page)
+                # 🔢 Parse số comment tổng từ text
+                raw_comments = video_info.get("comments")
+                expected_total_comments = None
+                if isinstance(raw_comments, str):
+                    expected_total_comments = self._parse_count(raw_comments)
+
+                comments = await self._collect_comments_tree(
+                    page,
+                    expected_total_comments=expected_total_comments,
+                )
                 video_info["comments_tree"] = comments
             except Exception as e:
                 logging.error(f"Error collecting comments for {video_url}: {e}")
                 video_info["comments_tree"] = []
+
 
             logging.info(f"Successfully extracted info for: {video_url}")
             return video_info
@@ -603,33 +660,67 @@ class TikTokScraper:
         """
         out_tmpl = str(self.TMP_DOWNLOAD_DIR / f"{video_id}.%(ext)s")
 
+        # ❌ BỎ impersonate đi, để yt-dlp tự impersonate
         ydl_opts = {
             "outtmpl": out_tmpl,
             "format": "best",
-            "quiet": True,
-            "ignoreerrors": True,
+            "quiet": False,    # bật log để debug
+            "ignoreerrors": False,
+            # "impersonate": "Chrome-100",  # <-- bỏ dòng này
         }
 
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(video_url, download=True)
-                if not info:
-                    logging.warning(f"yt_dlp failed to download: {video_url}")
-                    return None
 
+            if not info:
+                logging.warning(f"yt_dlp returned no info for: {video_url}")
+                return None
+
+            # 🔥 Lấy filepath thực tế từ info (cách chuẩn)
+            requested_downloads = info.get("requested_downloads") or []
+            if requested_downloads:
+                filepath = requested_downloads[0].get("filepath")
+                if filepath:
+                    local_filename = Path(filepath)
+                else:
+                    local_filename = Path(ydl.prepare_filename(info))
+            else:
                 local_filename = Path(ydl.prepare_filename(info))
 
-                object_name = f"bronze/{video_id}/video.mp4"
-                s3_path = self._upload_file_to_minio(local_filename, object_name)
-                return s3_path
+            logging.info(f"[yt_dlp] Local video file: {local_filename}")
 
-        except Exception as e:
-            logging.error(f"Error downloading video {video_url}: {e}")
+            if not local_filename.exists():
+                logging.error(
+                    f"[yt_dlp] Downloaded file not found on disk: {local_filename}"
+                )
+                candidates = list(self.TMP_DOWNLOAD_DIR.glob(f"{video_id}.*"))
+                if not candidates:
+                    logging.error(
+                        f"[yt_dlp] No candidate files found for video_id={video_id} in {self.TMP_DOWNLOAD_DIR}"
+                    )
+                    return None
+                local_filename = candidates[0]
+                logging.info(f"[yt_dlp] Using fallback file: {local_filename}")
+
+            object_name = f"bronze/{video_id}/video.mp4"
+            s3_path = self._upload_file_to_minio(local_filename, object_name)
+
+            if not s3_path:
+                logging.error(
+                    f"[MINIO] Failed to upload video to MinIO for {video_url} "
+                    f"(video_id={video_id}, local_file={local_filename})"
+                )
+                return None
+
+            return s3_path
+
+        except Exception:
+            logging.exception(f"Error downloading video {video_url}")
             return None
 
-    # ---------------------------------------------------------------------
-    # Scrape 1 video
-    # ---------------------------------------------------------------------
+
+
     async def scrape_single_video(self, video_url: str) -> Optional[Dict[str, Any]]:
         """
         Crawl 1 video cụ thể (URL trực tiếp).
@@ -661,13 +752,21 @@ class TikTokScraper:
             try:
                 video_info = await self._extract_video_info(page, video_url)
                 if not video_info:
-                    raise RuntimeError("Failed to extract video info")
+                    raise RuntimeError(f"Failed to extract video info for {video_url}")
 
+                # BẮT BUỘC download video, nếu bật cờ
                 if self.DOWNLOAD_VIDEO:
                     s3_path = self._download_video(video_url, video_id)
-                    if s3_path:
-                        video_info["video_s3_path"] = s3_path
+                    if not s3_path:
+                        # Không lưu metadata, không mark downloaded -> raise lỗi
+                        raise RuntimeError(
+                            f"Failed to download video for {video_url} (video_id={video_id})"
+                        )
+                    video_info["video_s3_path"] = s3_path
 
+                # Chỉ đến được đây nếu:
+                # - Hoặc DOWNLOAD_VIDEO = False
+                # - Hoặc download thành công
                 meta_object = f"bronze/{video_id}/metadata.json"
                 self._save_json_to_minio(video_info, meta_object)
 
@@ -678,9 +777,11 @@ class TikTokScraper:
 
             except Exception as e:
                 logging.error(f"Error scraping single video: {e}")
-                return None
+                # re-raise để chương trình dừng hẳn
+                raise
             finally:
                 await browser.close()
+
 
     # ---------------------------------------------------------------------
     # Hashtag: collect URLs + scrape multiple videos
@@ -783,6 +884,7 @@ class TikTokScraper:
 
                     video_info = await self._extract_video_info(page, video_url)
                     if not video_info:
+                        # metadata fail -> bỏ qua video này, nhưng KHÔNG mark downloaded
                         logging.warning(
                             f"Skip {video_url} because metadata extraction failed."
                         )
@@ -790,9 +892,18 @@ class TikTokScraper:
 
                     if self.DOWNLOAD_VIDEO:
                         s3_path = self._download_video(video_url, video_id)
-                        if s3_path:
-                            video_info["video_s3_path"] = s3_path
+                        if not s3_path:
+                            logging.warning(
+                                f"[SKIP_VIDEO] Failed to download video, skip: {video_url} "
+                                f"(video_id={video_id})"
+                            )
+                            # Không lưu metadata, không mark downloaded, chỉ bỏ qua video này
+                            continue
+                        video_info["video_s3_path"] = s3_path
 
+                    # Chỉ save nếu:
+                    # - DOWNLOAD_VIDEO = False, hoặc
+                    # - DOWNLOAD_VIDEO = True và download OK
                     meta_object = f"bronze/{video_id}/metadata.json"
                     self._save_json_to_minio(video_info, meta_object)
 
@@ -804,10 +915,13 @@ class TikTokScraper:
 
             except Exception as e:
                 logging.error(f"Error scraping hashtag #{hashtag}: {e}")
+                # Rethrow để chương trình dừng, đúng yêu cầu
+                raise
             finally:
                 await browser.close()
 
             return results
+
 
     # ---------------------------------------------------------------------
     # Save kết quả ra file JSON local để debug / demo
