@@ -2,3 +2,4 @@ playwright
 yt-dlp
 minio
 dotenv
+soundfile

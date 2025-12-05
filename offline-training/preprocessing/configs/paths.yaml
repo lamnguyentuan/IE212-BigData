@@ -1,0 +1,17 @@
+# Root thư mục chứa data theo Medallion Layout
+# tiktok-data/
+#   ├── bronze/{video_id}/video.mp4 + metadata.json
+#   ├── silver/{video_id}/...
+#   └── gold/...
+data_root: "tikharm"
+
+# Tên subfolder cho từng layer
+bronze_subdir: "bronze"
+silver_subdir: "silver"
+gold_subdir: "gold"
+
+use_minio: false          # bật / tắt đồng bộ MinIO
+upload_silver: false      # upload silver/* lên MinIO sau khi preprocess
+minio_bucket: "tiktok-data"
+
+video_ids: []             # nếu rỗng → tự scan bronze/*
