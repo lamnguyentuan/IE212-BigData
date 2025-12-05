@@ -94,3 +94,6 @@ yarn-error.log*
 *.bin
 model-serving/artifacts/
 offline-training/artifacts/
+
+tikharm_local
+tiktik-data_local

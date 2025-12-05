@@ -3,3 +3,11 @@ yt-dlp
 minio
 dotenv
 soundfile
+torch
+transformers
+numpy
+scikit-learn
+pyyaml
+opencv-python
+soundfile
+minio
