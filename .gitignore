@@ -31,9 +31,9 @@ logs/
 minio-data/
 
 # Large data / Outputs / Temporary data
-offline-training/datasets/
-offline-training/artifacts/
-offline-training/datasets/**
+offline_training/datasets/
+offline_training/artifacts/
+offline_training/datasets/**
 
 tmp/
 tmp_downloads/

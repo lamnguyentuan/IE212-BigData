@@ -39,12 +39,43 @@ class MultimodalFeatureBuilder:
     base_dir: Path = Path("tiktok-data")
     silver_name: str = "silver"
     gold_name: str = "gold"
-    bronze_name: str = "bronze"   # 💥 QUAN TRỌNG: phải có field này
+    bronze_name: str = "bronze"
+
+    # phải trùng với numeric_feature_names trong MetadataPreprocessor
+    numeric_feature_names: List[str] = None
 
     def __post_init__(self) -> None:
-        # Đảm bảo base_dir là Path
         if not isinstance(self.base_dir, Path):
             self.base_dir = Path(self.base_dir)
+
+        if self.numeric_feature_names is None:
+            self.numeric_feature_names = [
+                "likes_log",
+                "comments_log",
+                "shares_log",
+                "bookmarks_log",
+                "views_log",
+                "like_rate",
+                "comment_rate",
+                "share_rate",
+                "bookmark_rate",
+                "engagement_rate",
+                "has_views",
+                "has_bookmarks",
+                "age_days",
+                "month_sin",
+                "month_cos",
+                "has_date",
+                "n_comments",
+                "avg_len_chars",
+                "avg_len_words",
+                "frac_has_laugh_emoji",
+                "frac_has_question",
+                "n_toxic_comments",
+                "frac_toxic_comments",
+                "n_constructive_comments",
+                "frac_constructive_comments",
+            ]
 
     # ----------------- convenience dirs -----------------
 
@@ -178,6 +209,18 @@ class MultimodalFeatureBuilder:
             print(f"[MultimodalFeatureBuilder] WARNING: invalid keys in metadata_features.npz for {video_id}")
             return None
 
+        # 💡 Chỉ giữ các feature numeric không phải là COUNT
+        #    (vẫn giữ 2 tỉ lệ: frac_toxic_comments, frac_constructive_comments)
+        drop_names = {"n_comments", "n_toxic_comments", "n_constructive_comments"}
+
+        keep_indices = [
+            idx
+            for idx, name in enumerate(self.numeric_feature_names)
+            if name not in drop_names
+        ]
+
+        numeric_selected = numeric_scaled[keep_indices]
+
         text_emb = comments_emb
         label = self._load_label(video_id)
         if label is None:
@@ -188,7 +231,7 @@ class MultimodalFeatureBuilder:
             video_emb=video_emb.astype(np.float32),
             audio_emb=audio_emb.astype(np.float32),
             text_emb=text_emb.astype(np.float32),
-            metadata_numeric=numeric_scaled.astype(np.float32),
+            metadata_numeric=numeric_selected.astype(np.float32),
             label=int(label),
         )
         return row
