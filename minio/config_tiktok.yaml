@@ -1,4 +1,4 @@
-endpoint: "localhost:9000"
+endpoint: "100.111.82.102:9000"
 access_key: "minioadmin"
 secure: false
 bucket: "tiktok-data"

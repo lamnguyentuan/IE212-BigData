@@ -22,38 +22,38 @@ captcha_poll_interval_sec: 5.0     # mỗi 5s check lại một lần
 
 # ====== Hashtag Settings ======
 hashtags:                     # Danh sách hashtag để crawl
-  - livefest2025
-  - xuhuong
-  - vannghe2011
-  - quoctedanong
-  - truytimlongdienhuong
-  - bavi
-  - mailisa
-  - 19thang11
-  - quanglinhvlog
-  - thuytien
-  - salegiuathang
-  - huonggiang
-  - hangdumuc
-  - missuniverse
-  - lulut
-  - hocsinhcap3 
-  - livefest2025    # duplicate
-  - xuhuong
-  - vannghe2011
-  - quoctedanong
-  - truytimlongdienhuong
-  - bavi
-  - mailisa
-  - 19thang11
-  - quanglinhvlog
-  - thuytien
-  - salegiuathang
-  - huonggiang
-  - hangdumuc
-  - missuniverse
-  - lulut
-  - hocsinhcap3
+  #- livefest2025
+  #- xuhuong
+  #- vannghe2011
+  #- quoctedanong
+  #- truytimlongdienhuong
+  #- bavi
+  #- mailisa
+  #- 19thang11
+  #- quanglinhvlog
+  #- thuytien
+  #- salegiuathang
+  #- huonggiang
+  #- hangdumuc
+  #- missuniverse
+  #- lulut
+  #- hocsinhcap3 
+  #- livefest2025    # duplicate
+  #- xuhuong
+  #- vannghe2011
+  #- quoctedanong
+  #- truytimlongdienhuong
+  #- bavi
+  # - mailisa
+  #- 19thang11
+  #- quanglinhvlog
+  # - thuytien
+  #- salegiuathang
+  # - huonggiang
+  #- hangdumuc
+  #- missuniverse
+  # - lulut
+  # - hocsinhcap3
   # - funny
   # - foryou
   # - xuhuong
@@ -64,6 +64,20 @@ hashtags:                     # Danh sách hashtag để crawl
   # - cute
   # - music
   # - besttiktok
+  # - horrortok
+  - viral
+  - meme
+  - funny
+  - dance
+  - familyguy
+  - pets
+  - fitness
+  - travel
+  - food
+  - fashion
+  - lienquan
+  - LOL 
+
 max_videos_per_hashtag: 5    # Mỗi hashtag crawl bao nhiêu video
 
 # ====== MinIO Settings ======
