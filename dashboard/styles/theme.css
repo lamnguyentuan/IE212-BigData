@@ -1,0 +1,18 @@
+/* Dark Mode friendly theme enhancements */
+
+/* Accent for metrics */
+div[data-testid="stMetricValue"] {
+    font-size: 2rem;
+    color: #FF4B4B; /* Streamlit Red/Primary */
+}
+
+/* Cleaner table */
+div[data-testid="stDataFrame"] {
+    border: 1px solid #333;
+    border-radius: 5px;
+}
+
+/* Headers */
+h1, h2, h3 {
+    font-family: 'Inter', sans-serif;
+}

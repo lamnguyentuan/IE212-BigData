@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-serving
+  labels:
+    app: model-serving
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-serving
+  template:
+    metadata:
+      labels:
+        app: model-serving
+    spec:
+      containers:
+      - name: serving
+        image: funa21/tiktok-serving:latest # Replace with actual built image
+        ports:
+        - containerPort: 8000
+        env:
+        - name: MINIO_ENDPOINT
+          value: "minio-service:9000"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-secrets
+              key: accessKey
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-secrets
+              key: secretKey
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-serving-service
+spec:
+  type: LoadBalancer # or NodePort
+  selector:
+    app: model-serving
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000

@@ -34,5 +34,5 @@ use_minio: true       # nếu đang chạy local
 upload_silver: true
 upload_gold: true 
 minio_bucket: "tikharm"  # nếu có bucket tên khác thì đổi
-video_ids: ["train_safe_000001", "test_adult_000001"]            
+video_ids: []            
 # hoặc liệt kê nếu muốn chạy subset

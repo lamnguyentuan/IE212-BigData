@@ -8,10 +8,14 @@ def get_logger(
     level: int = logging.INFO,
 ) -> logging.Logger:
     """
-    Tạo logger đơn giản cho toàn bộ preprocessing.
+    Get a configured logger wrapper for preprocessing.
 
-    - Format: [LEVEL] name - message
-    - Không cấu hình file handler ở đây (giữ đơn giản, dễ import).
+    Usage:
+        logger = get_logger("preprocess")
+
+    Args:
+        name: Logger name (default: offline-training)
+        level: Logging level (default: INFO)
     """
     logger_name = name or "offline-training"
     logger = logging.getLogger(logger_name)

@@ -1,217 +1,94 @@
 """
-Upload TikHarm dataset lên MinIO (không tạo bản preprocessed local)
+Upload TikHarm dataset to MinIO + Generate Manifest.
 
-Dataset gốc (local):
-
-offline-training/datasets/TikHarm/
-├── train/
-│   ├── Adult Content/
-│   ├── Harmful Content/
-│   ├── Safe/
-│   └── Suicide/
-├── val/
-└── test/
-
-Script này sẽ:
-- Duyệt qua các split: train / val / test
-- Duyệt qua các label folder: "Adult Content", "Harmful Content", "Safe", "Suicide"
-- Với mỗi file video, sinh ra một video_id theo format:
-    {split}_{label_slug}_{running_index}
-  VD:
-    train_safe_000001, val_adult_000010, test_harmful_000123, ...
-- Upload trực tiếp lên MinIO (bucket trong config_tikharm.yaml) với layout:
-
-tikharm/
-└── bronze/
-    └── {video_id}/
-        ├── video.mp4
-        └── metadata.json
-
-Trong đó metadata.json chứa:
-- video_id
-- split
-- label_raw (vd: "Adult Content")
-- label (slug: adult/harmful/safe/suicide)
-- original_filename
-- original_path (tương đối so với TikHarm root)
-
-Không tạo thêm bất kỳ thư mục preprocessed nào trên local.
+Enhancements:
+- Uses `minio_client.upload_file` helper.
+- Generates a `dataset_manifest.json` locally and uploads to MinIO root or bronze.
 """
 
-from __future__ import annotations
-
-import io
 import json
-import logging
-import mimetypes
-import os
+import io
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import List, Dict
 
-# Thiết lập ROOT = thư mục IE212-BigData/
 ROOT = Path(__file__).resolve().parents[2]
-
-# Cho phép import minio_client từ thư mục minio/
+sys.path.append(str(ROOT))
 sys.path.append(str(ROOT / "minio"))
-from minio_client import get_minio_client  # type: ignore
 
-# Thư mục TikHarm gốc trên local
+from minio_client import get_minio_client, upload_file
+from data_pipeline.utils.logger import get_logger
+
+logger = get_logger("tikharm-upload")
 SRC_ROOT = ROOT / "offline-training" / "datasets" / "TikHarm"
 
-# Các split và mapping label
-SPLITS: List[str] = ["train", "val", "test"]
+SPLITS = ["train", "val", "test"]
+VIDEO_EXTS = {".mp4", ".mov", ".avi"}
 
-LABEL_SLUGS: Dict[str, str] = {
-    "Adult Content": "adult",
-    "Harmful Content": "harmful",
-    "Safe": "safe",
-    "Suicide": "suicide",
-}
+def upload_and_index():
+    client, bucket = get_minio_client("config_tikharm.yaml")
+    
+    if not SRC_ROOT.exists():
+        logger.error(f"Source root not found: {SRC_ROOT}")
+        return
 
-# Định dạng video hợp lệ (nếu dataset chỉ có .mp4 thì vẫn ok)
-VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".flv", ".webm"}
+    manifest: List[Dict] = []
 
-
-def setup_logging() -> None:
-    """Thiết lập logging cho quá trình upload."""
-    log_dir = ROOT / "logs"
-    log_dir.mkdir(parents=True, exist_ok=True)
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(log_dir / "tikharm_upload.log", encoding="utf-8"),
-            logging.StreamHandler(),
-        ],
-    )
-
-
-def validate_local_root(root: Path) -> None:
-    """Kiểm tra thư mục gốc TikHarm có tồn tại không."""
-    if not root.exists():
-        raise FileNotFoundError(
-            f"Không tìm thấy thư mục TikHarm gốc: {root}\n"
-            f"Hãy chắc chắn dataset nằm ở offline-training/datasets/TikHarm"
-        )
-
-
-def upload_tikharm_to_minio(config_name: str = "config_tikharm.yaml") -> None:
-    """
-    Tiền xử lý + upload TikHarm trực tiếp lên MinIO.
-
-    - Không ghi ra thư mục preprocessed local
-    - Mỗi video ứng với một "video_id" duy nhất
-    - MinIO layout:
-        bronze/{video_id}/video.mp4
-        bronze/{video_id}/metadata.json
-    """
-    client, bucket = get_minio_client(config_name)
-    logging.info(f"[MINIO] Using bucket: {bucket}")
-    logging.info(f"[SRC_ROOT] {SRC_ROOT}")
-
-    # Duyệt lần lượt các split: train / val / test
     for split in SPLITS:
         split_dir = SRC_ROOT / split
-        if not split_dir.exists():
-            logging.warning(f"[SKIP] Split folder not found: {split_dir}")
+        if not split_dir.exists(): 
             continue
-
-        logging.info(f"=== Processing split: {split} ===")
-
-        # Bộ đếm cho từng label_slug để tạo index 000001, 000002, ...
-        counters: Dict[str, int] = {slug: 0 for slug in LABEL_SLUGS.values()}
-
-        # Duyệt các thư mục label: "Adult Content", "Safe", ...
+            
         for label_dir in split_dir.iterdir():
-            if not label_dir.is_dir():
-                continue
-
-            label_raw = label_dir.name
-            label_slug = LABEL_SLUGS.get(label_raw)
-
-            if label_slug is None:
-                logging.warning(f"[SKIP] Unknown label folder: {label_raw}")
-                continue
-
-            logging.info(f"  Label '{label_raw}' -> slug '{label_slug}'")
-
-            # Duyệt tất cả file video bên trong label_dir (đệ quy)
-            for f in label_dir.rglob("*"):
-                if not f.is_file():
+            if not label_dir.is_dir(): continue
+            
+            label_name = label_dir.name
+            
+            for vid_file in label_dir.rglob("*"):
+                if vid_file.suffix.lower() not in VIDEO_EXTS:
+                    continue
+                
+                # Create ID
+                # Simple ID strategy: split_label_filename (sanitized)
+                safe_name = vid_file.stem.replace(" ", "_")
+                clean_label = label_name.replace(" ", "_").lower()
+                video_id = f"{split}_{clean_label}_{safe_name}"
+                
+                # 1. Upload Video
+                obj_vid = f"bronze/{video_id}/video.mp4"
+                if upload_file(client, bucket, obj_vid, str(vid_file)):
+                    logger.info(f"Uploaded {video_id}")
+                else:
+                    logger.error(f"Failed {video_id}")
                     continue
 
-                if f.suffix.lower() not in VIDEO_EXTS:
-                    continue
-
-                counters[label_slug] += 1
-                idx = counters[label_slug]
-
-                video_id = f"{split}_{label_slug}_{idx:06d}"
-                logging.info(f"    [{label_slug}] #{idx} -> video_id={video_id}")
-
-                # -------------------------
-                # 1) Upload video
-                # -------------------------
-                object_video = f"bronze/{video_id}/video.mp4"
-
-                content_type, _ = mimetypes.guess_type(str(f))
-                if content_type is None:
-                    content_type = "application/octet-stream"
-
-                logging.info(
-                    f"       Upload video: {f} -> s3://{bucket}/{object_video}"
-                )
-                client.fput_object(
-                    bucket_name=bucket,
-                    object_name=object_video,
-                    file_path=str(f),
-                    content_type=content_type,
-                )
-
-                # -------------------------
-                # 2) Tạo metadata và upload metadata.json
-                # -------------------------
-                rel_path = f.relative_to(SRC_ROOT)
-
-                metadata = {
+                # 2. Upload Metadata
+                meta = {
                     "video_id": video_id,
                     "split": split,
-                    "label_raw": label_raw,
-                    "label": label_slug,
-                    "original_filename": f.name,
-                    "original_path": str(rel_path),
-                    "source": "TikHarm",
+                    "label": label_name,
+                    "original_path": str(vid_file.relative_to(SRC_ROOT))
                 }
+                
+                obj_meta = f"bronze/{video_id}/metadata.json"
+                try:
+                    meta_bytes = json.dumps(meta).encode('utf-8')
+                    client.put_object(bucket, obj_meta, io.BytesIO(meta_bytes), len(meta_bytes), content_type="application/json")
+                except Exception as e:
+                    logger.error(f"Meta upload failed: {e}")
 
-                metadata_bytes = json.dumps(
-                    metadata, indent=2, ensure_ascii=False
-                ).encode("utf-8")
-                metadata_stream = io.BytesIO(metadata_bytes)
+                manifest.append(meta)
 
-                object_meta = f"bronze/{video_id}/metadata.json"
-                logging.info(
-                    f"       Upload metadata.json -> s3://{bucket}/{object_meta}"
-                )
-                client.put_object(
-                    bucket_name=bucket,
-                    object_name=object_meta,
-                    data=metadata_stream,
-                    length=len(metadata_bytes),
-                    content_type="application/json",
-                )
-
-        logging.info(f"=== DONE split: {split} ===")
-
-    logging.info("=== FINISHED TikHarm upload to MinIO (bronze) ===")
-
-
-def main() -> None:
-    setup_logging()
-    validate_local_root(SRC_ROOT)
-    upload_tikharm_to_minio(config_name="config_tikharm.yaml")
-
+    # 3. Write Manifest
+    manifest_path = ROOT / "tikharm_manifest.json"
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    
+    logger.info(f"Manifest written to {manifest_path}")
+    
+    # Optional: Upload manifest to MinIO
+    upload_file(client, bucket, "dataset_manifest.json", str(manifest_path))
+    logger.info("Manifest uploaded to MinIO root.")
 
 if __name__ == "__main__":
-    main()
+    upload_and_index()

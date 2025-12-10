@@ -52,6 +52,18 @@ class VideoFrameExtractor:
             num_frames=self.num_frames,
         )
 
+    def extract_frames(self, video_path: Path, out_dir: Path, video_id: str = "") -> None:
+        """
+        Wrapper cho pipeline: chỉ định path cụ thể.
+        """
+        out_dir.mkdir(parents=True, exist_ok=True)
+        extract_frames_ffmpeg(
+            video_path=video_path,
+            out_dir=out_dir,
+            frame_size=self.frame_size,
+            num_frames=self.num_frames,
+        )
+
     def extract_all(self, video_ids: Iterable[str] | None = None):
         if video_ids is None:
             video_ids = self.list_video_ids()

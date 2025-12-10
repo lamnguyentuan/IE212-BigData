@@ -7,9 +7,26 @@ import numpy as np
 import soundfile as sf  # pip install soundfile
 
 
-def run_cmd(cmd: list[str]) -> None:
+def run_cmd(cmd: list[str], timeout: float = 300.0) -> None:
     """Chạy 1 lệnh subprocess đơn giản, raise nếu lỗi."""
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    # capture_output=True equivalent to stdout=PIPE, stderr=PIPE
+    try:
+        # Popen/run with PIPE can deadlock if output is large and not read excessively.
+        # But we use run() which reads internally.
+        # Adding timeout is critical.
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False  # we check returncode manually
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError(
+            f"Command timed out after {timeout}s: {' '.join(cmd)}\n"
+            f"stderr: {e.stderr.decode('utf-8', errors='ignore') if e.stderr else ''}"
+        ) from e
+
     if proc.returncode != 0:
         raise RuntimeError(
             f"Command failed ({proc.returncode}): "
@@ -31,6 +48,8 @@ def extract_audio_ffmpeg(
     out_wav_path.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
         "ffmpeg",
+        "-nostdin",     # no interaction
+        "-loglevel", "error", # silence non-error logs
         "-i",
         str(video_path),
         "-vn",          # no video
@@ -40,7 +59,7 @@ def extract_audio_ffmpeg(
         str(out_wav_path),
         "-y",           # overwrite
     ]
-    run_cmd(cmd)
+    run_cmd(cmd, timeout=300)
 
 
 def load_wav_mono_16k(

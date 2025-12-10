@@ -1,0 +1,18 @@
+# Offline Training - TikTok VN Finetune Config
+model:
+  video_dim: 768
+  audio_dim: 768
+  text_dim: 768
+  meta_dim: 22
+  fusion_dim: 768
+  num_classes: 2    # Negative (Safe), Positive (Harmful - binary task)
+  dropout: 0.2
+
+training:
+  batch_size: 16
+  epochs: 5
+  lr: 5e-5
+  weight_decay: 1e-2
+  
+data:
+  train_path: "tiktok-data/gold/multimodal_dataset.npz" 
