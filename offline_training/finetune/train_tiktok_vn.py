@@ -63,8 +63,10 @@ def train():
         text_dim=model_cfg["text_dim"],
         meta_dim=model_cfg["meta_dim"],
         fusion_dim=model_cfg["fusion_dim"],
-        num_classes=4, # Original
-        dropout=model_cfg["dropout"]
+        num_classes=4, # Original pretrain classes
+        dropout=model_cfg["dropout"],
+        fusion_heads=model_cfg.get("fusion_heads", 8),
+        fusion_layers=model_cfg.get("fusion_layers", 2)
     )
     
     if pretrain_ckpt.exists():
