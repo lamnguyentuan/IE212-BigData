@@ -5,6 +5,21 @@ from typing import Any, Dict, Iterable, List
 import json
 import numpy as np
 import yaml
+import shutil
+import logging
+
+from pathlib import Path
+
+logger = logging.getLogger("file-io")
+
+def safe_rmtree(path: Path) -> None:
+    """
+    Xoá 1 thư mục và toàn bộ nội dung bên trong (nếu tồn tại).
+    Dùng cho việc clean local sau khi xử lý 1 video.
+    """
+    if path.exists():
+        logger.info(f"[file-io] Removing directory: {path}")
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def ensure_dir(path: Path) -> Path:

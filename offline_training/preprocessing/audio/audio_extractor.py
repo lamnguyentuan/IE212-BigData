@@ -58,6 +58,19 @@ class AudioExtractor:
         )
         return out_wav
 
+    def extract_audio_for_video(self, video_path: Path, out_dir: Path, video_id: str = "") -> Path:
+        """
+        Wrapper cho pipeline: cho phép chỉ định path cụ thể mà không infer theo base_dir.
+        """
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_wav = out_dir / "audio.wav"
+        extract_audio_ffmpeg(
+            video_path=video_path,
+            out_wav_path=out_wav,
+            sample_rate=self.sample_rate,
+        )
+        return out_wav
+
     def extract_all(self, video_ids: Iterable[str] | None = None) -> None:
         """
         Chạy extract audio cho nhiều video.

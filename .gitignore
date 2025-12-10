@@ -31,9 +31,9 @@ logs/
 minio-data/
 
 # Large data / Outputs / Temporary data
-offline_training/datasets/
+
 offline_training/artifacts/
-offline_training/datasets/**
+
 
 tmp/
 tmp_downloads/
@@ -96,4 +96,5 @@ model-serving/artifacts/
 offline-training/artifacts/
 
 tikharm_local
-tiktik-data_local
+tiktik-data_local!
+!offline_training/datasets/

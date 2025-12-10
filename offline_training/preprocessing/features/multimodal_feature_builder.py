@@ -174,12 +174,12 @@ class MultimodalFeatureBuilder:
 
     # ----------------- build single row -----------------
 
-    def _build_single_row(self, video_id: str) -> Optional[MultimodalFeatureRow]:
-        """
-        Build 1 MultimodalFeatureRow từ silver/{video_id} và bronze/{video_id}/metadata.json.
-        """
-        silver_vid_dir = self.silver_dir() / video_id
+    # ----------------- build single row -----------------
 
+    def build_row_from_dir(self, video_id: str, silver_vid_dir: Path, metadata_json_path: Optional[Path] = None) -> Optional[MultimodalFeatureRow]:
+        """
+        Build 1 MultimodalFeatureRow từ thư mục local silver (đã chứa embedding) và metadata.json.
+        """
         video_emb_path = silver_vid_dir / "video_embedding.npy"
         audio_emb_path = silver_vid_dir / "audio_embedding.npy"
         meta_feat_path = silver_vid_dir / "metadata_features.npz"
@@ -210,7 +210,6 @@ class MultimodalFeatureBuilder:
             return None
 
         # 💡 Chỉ giữ các feature numeric không phải là COUNT
-        #    (vẫn giữ 2 tỉ lệ: frac_toxic_comments, frac_constructive_comments)
         drop_names = {"n_comments", "n_toxic_comments", "n_constructive_comments"}
 
         keep_indices = [
@@ -222,8 +221,35 @@ class MultimodalFeatureBuilder:
         numeric_selected = numeric_scaled[keep_indices]
 
         text_emb = comments_emb
-        label = self._load_label(video_id)
+        
+        # Load label from metadata json (bronze) OR silver
+        label = None
+        
+        # Try finding label in silver dir first
+        silver_label_p = silver_vid_dir / "label.json"
+        if silver_label_p.exists():
+             try:
+                obj = json.loads(silver_label_p.read_text(encoding="utf-8"))
+                val = obj.get("label")
+                if val is not None:
+                     label = val if isinstance(val, int) else self._map_label_string_to_id(str(val))
+             except: pass
+        
+        # If not, try metadata.json passed explicitly
+        if label is None and metadata_json_path and metadata_json_path.exists():
+             try:
+                meta = json.loads(metadata_json_path.read_text(encoding="utf-8"))
+                raw = meta.get("label") or meta.get("label_raw")
+                if raw:
+                    label = self._map_label_string_to_id(str(raw))
+             except: pass
+        
+        # Fallback to internal lookup if still None (might check Gold)
         if label is None:
+            label = self._load_label(video_id)
+
+        if label is None:
+            # -1 for unlabeled / unknown
             label = -1
 
         row = MultimodalFeatureRow(

@@ -5,8 +5,21 @@ import numpy as np
 import subprocess
 
 
-def run_cmd(cmd: list[str]):
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def run_cmd(cmd: list[str], timeout: float = 300.0):
+    try:
+        proc = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False
+        )
+    except subprocess.TimeoutExpired as e:
+         raise RuntimeError(
+            f"Command timed out after {timeout}s: {' '.join(cmd)}\n"
+            f"stderr: {e.stderr.decode('utf-8', errors='ignore') if e.stderr else ''}"
+        ) from e
+
     if proc.returncode != 0:
         raise RuntimeError(
             f"Command failed ({proc.returncode}): {' '.join(cmd)}\n"
@@ -35,6 +48,8 @@ def extract_frames_ffmpeg(
     # 1. Extract tất cả frames
     cmd = [
         "ffmpeg",
+        "-nostdin",
+        "-loglevel", "error",
         "-i",
         str(video_path),
         "-vf",
@@ -42,7 +57,7 @@ def extract_frames_ffmpeg(
         str(temp_dir / "frame_%05d.jpg"),
         "-y",
     ]
-    run_cmd(cmd)
+    run_cmd(cmd, timeout=300)
 
     # 2. Uniform sampling
     all_frames = sorted(temp_dir.glob("frame_*.jpg"))

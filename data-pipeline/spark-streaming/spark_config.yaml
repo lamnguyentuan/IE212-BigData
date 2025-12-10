@@ -1,0 +1,15 @@
+spark:
+  app_name: "TikTokHarmfulContentDetection"
+  master: "local[*]"
+  
+  # MinIO S3A Configuration
+  hadoop_conf:
+    "fs.s3a.endpoint": "http://localhost:9000"
+    "fs.s3a.access.key": "minioadmin"
+    "fs.s3a.secret.key": "minioadmin" # Should be overridden by env var in prod
+    "fs.s3a.path.style.access": "true"
+    "fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    "fs.s3a.connection.ssl.enabled": "false"
+    
+  # Streaming/Batch settings
+  batch_duration: 10 # seconds (?) currently unused for batch structure

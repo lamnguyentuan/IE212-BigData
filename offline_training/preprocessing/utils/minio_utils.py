@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 import os
 
@@ -108,6 +108,42 @@ class MinioClientWrapper:
             object_name=object_name,
             file_path=str(local_path),
         )
+
+    def get_object_text(self, object_name: str) -> str:
+        """
+        Lấy nội dung text của object (json, txt...).
+        """
+        # get_object trả về response stream
+        response = None
+        try:
+            response = self._client.get_object(self.config.bucket, object_name)
+            return response.read().decode("utf-8")
+        finally:
+            if response:
+                response.close()
+                response.release_conn()
+
+    def list_subdirs(self, prefix: str) -> List[str]:
+        """
+        Liệt kê danh sách thư mục con trực tiếp dưới prefix (ví dụ: bronze/).
+        Dùng để lấy danh sách video_ids.
+        """
+        if not prefix.endswith("/"):
+            prefix += "/"
+            
+        objects = self._client.list_objects(self.config.bucket, prefix=prefix, recursive=False)
+        dirs = []
+        for obj in objects:
+            if obj.is_dir:
+                # obj.object_name vd: "bronze/vid1/"
+                # Cắt bỏ prefix "bronze/"
+                name = obj.object_name
+                if name.startswith(prefix):
+                    name = name[len(prefix):]
+                name = name.strip("/")
+                if name:
+                    dirs.append(name)
+        return sorted(dirs)
 
     # -------- convenience methods cho Medallion --------
 

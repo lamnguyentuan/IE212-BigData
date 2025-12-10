@@ -1,298 +1,66 @@
-# **TikTok Harmful Content Detection – Multimodal + Big Data Pipeline**
----
+# TikTok Harmful Content Detection System
 
-## 🧩 **1. Giới thiệu dự án**
+This project implements an end-to-end Big Data pipeline for detecting harmful content on TikTok. It utilizes a multimodal approach, analyzing video frames (TimeSformer), audio (Wav2Vec2), and metadata/text (ViSoBERT) to classify videos as Safe or Not Safe (covering Adult, Harmful, Suicide, etc.).
 
-Hệ thống phát hiện video độc hại trên TikTok với khả năng:
+The system features:
+- **Crawling System**: Scrapes TikTok videos and uploads them to a Data Lake.
+- **Medallion Architecture**: Organizes data in MinIO (Bronze/Silver/Gold) for scalable processing.
+- **Offline Training**: Pretraining on the TikHarm dataset and Finetuning on Vietnamese TikTok data.
+- **Real-time Processing**: Spark Streaming pipeline for processing new videos via Kafka.
+- **Model Serving**: FastAPI service for real-time inference.
+- **Dashboard**: Streamlit app for monitoring and analytics.
 
-* Thu thập video TikTok theo thời gian thực
-* Trích xuất đa phương thức (video frames, audio, OCR, ASR, comments)
-* Huấn luyện mô hình đa mô thức:
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed view of the system components and data flow.
 
-  * **TimeSformer** (video)
-  * **wav2vec2** (audio)
-  * **ViSoBERT** (text)
-  * **Cross-Attention Fusion**
-* Phân loại Safe / Not Safe
-* Triển khai trong pipeline Big Data: Kafka → Spark → MinIO → MongoDB
-* Dashboard giám sát real-time
+## 🚀 Quickstart
 
-**Storage chính:** MinIO (S3-compatible)
-**Tổ chức dữ liệu:** Medallion (Bronze → Silver → Gold)
+### 1. Run Local Stack (Infrastructure)
+Start the core services (MinIO, Kafka, Spark master, MongoDB, etc.) using Docker Compose:
 
----
-
-## 🏛 **2. Tổng quan kiến trúc**
-
-```
-Crawl → Kafka → Spark Streaming → MinIO (Bronze → Silver → Gold)
-                           ↓
-                     Model Serving
-                           ↓
-                       MongoDB
-                           ↓
-                   Streamlit Dashboard
-```
-
----
-
-# 📦 **3. Cấu trúc thư mục dự án (FULL TREE)**
-
-```
-tiktok-harmful-content-detection/
-│
-├── README.md
-├── requirements.txt
-├── docker-compose.yml
-├── .env
-│
-├── offline-training/
-│   ├── data_access/
-│   │   ├── minio_reader.py
-│   │   └── dataset_config.yaml
-│   ├── datasets/                     # optional (local debug)
-│   ├── preprocessing/
-│   │   ├── extract_frames.py
-│   │   ├── extract_audio.py
-│   │   ├── ocr_text.py
-│   │   ├── asr_text.py
-│   │   └── clean_text.py
-│   ├── models/
-│   │   ├── timesformer_encoder.py
-│   │   ├── wav2vec_encoder.py
-│   │   ├── viso_bert_encoder.py
-│   │   ├── fusion_cross_attention.py
-│   │   └── classifier.py
-│   ├── pretrain/
-│   │   ├── pretrain_config.yaml
-│   │   └── pretrain_run.py
-│   ├── finetune/
-│   │   ├── finetune_config.yaml
-│   │   └── finetune_run.py
-│   ├── utils/
-│   │   ├── dataset_loader.py
-│   │   ├── metrics.py
-│   │   └── scheduler.py
-│   └── artifacts/
-│       ├── pretrained_model.pt
-│       ├── finetuned_model.pt
-│       └── tokenizer/
-│
-├── data-pipeline/
-│   ├── kafka/
-│   │   ├── producer/
-│   │   │   ├── crawl_and_push.py
-│   │   │   └── send_metadata.py
-│   │   ├── consumer/
-│   │   │   └── read_stream.py
-│   │   ├── topics/
-│   │   │   ├── video-topic
-│   │   │   └── metadata-topic
-│   │   └── kafka_config.json
-│   │
-│   ├── storage/
-│   │   ├── minio_client.py
-│   │   ├── minio_config.yaml
-│   │   └── medallion_layout.md
-│   │
-│   ├── medallion/
-│   │   ├── bronze_loader/
-│   │   │   ├── save_raw_to_minio.py
-│   │   │   └── validate_raw.py
-│   │   ├── silver_transform/
-│   │   │   ├── clean_text_job.py
-│   │   │   ├── process_media_job.py
-│   │   │   └── write_silver_minio.py
-│   │   └── gold_curate/
-│   │       ├── build_training_sets.py
-│   │       ├── build_analytics_views.py
-│   │       └── write_gold_minio.py
-│   │
-│   ├── spark-streaming/
-│   │   ├── main_stream.py
-│   │   ├── preprocess/
-│   │   │   ├── ffmpeg_ops.py
-│   │   │   ├── ocr_engine.py
-│   │   │   ├── asr_engine.py
-│   │   │   └── text_processing.py
-│   │   ├── inference/
-│   │   │   └── call_serving.py
-│   │   └── spark_config.yaml
-│   │
-│   └── utils/
-│       ├── logger.py
-│       └── helpers.py
-│
-├── model-serving/
-│   ├── app/
-│   │   ├── server.py
-│   │   ├── load_model.py
-│   │   ├── inference.py
-│   │   ├── schemas.py
-│   │   └── requirements.txt
-│   ├── artifacts/
-│   │   └── finetuned_model.pt
-│   └── Dockerfile
-│
-├── dashboard/
-│   ├── app.py
-│   ├── components/
-│   │   ├── video_player.py
-│   │   ├── charts.py
-│   │   └── stats_box.py
-│   ├── services/
-│   │   ├── mongodb_query.py
-│   │   └── minio_reader.py
-│   └── styles/
-│       └── theme.css
-│
-└── deployment/
-    ├── airflow/
-    │   ├── dags/
-    │   │   ├── bronze_loader_dag.py
-    │   │   ├── silver_transform_dag.py
-    │   │   └── gold_curate_dag.py
-    │   └── airflow_config.cfg
-    │
-    ├── docker/
-    │   ├── kafka/
-    │   ├── spark/
-    │   ├── minio/
-    │   │   ├── Dockerfile
-    │   │   └── minio.env.example
-    │   ├── mongodb/
-    │   └── other_services/
-    │
-    ├── configs/
-    │   ├── spark-submit.sh
-    │   └── environment.yaml
-    │
-    └── k8s/
-        ├── kafka.yaml
-        ├── spark.yaml
-        ├── minio.yaml
-        ├── serving.yaml
-        └── dashboard.yaml
-```
-
----
-
-# 🏗 **4. Chi tiết các thư mục & nhiệm vụ**
-
----
-
-## 🔥 **offline-training/**
-
-Huấn luyện mô hình:
-
-* Pretrain trên TikHarm (4 classes)
-* Finetune trên dataset Việt Nam (Safe / Not Safe)
-
-Đọc dữ liệu từ MinIO: `gold/training_sets/...`
-
----
-
-## 🚚 **data-pipeline/**
-
-### **📌 1. kafka/**
-
-Nhận sự kiện crawl → đẩy vào pipeline.
-
-### **📌 2. storage/**
-
-Client MinIO + config + layout Medallion.
-
-### **📌 3. medallion/**
-
-3 tầng xử lý:
-
-#### **Bronze → raw ingestion**
-
-* video gốc
-* audio gốc
-* metadata thô
-* OCR/ASR thô
-
-#### **Silver → cleaned + processed**
-
-* video resized
-* audio normalized
-* text OCR/ASR đã clean
-* features sơ cấp
-
-#### **Gold → curated + ML-ready**
-
-* dataset train/val/test
-* analytics views
-* inference-ready views
-
-### **📌 4. spark-streaming/**
-
-Spark đọc Kafka → đọc/ghi MinIO theo từng layer.
-
----
-
-## 🧠 **model-serving/**
-
-FastAPI + PyTorch:
-
-* Load mô hình finetune
-* Nhận embedding từ Spark
-* Trả nhãn Safe / Not Safe
-
----
-
-## 📊 **dashboard/**
-
-Realtime monitoring:
-
-* MongoDB → thống kê kết quả infer
-* MinIO (gold/analytics_views) → biểu đồ phân tích nội dung
-
----
-
-## 🚀 **deployment/**
-
-Airflow + Docker.
-
----
-
-# 🗂 **5. MinIO Medallion Layout**
-
-```
-tiktok-data/
-│
-├── bronze/
-│   ├── video/
-│   ├── audio/
-│   ├── ocr_raw/
-│   ├── asr_raw/
-│   └── metadata_raw/
-│
-├── silver/
-│   ├── video_processed/
-│   ├── audio_processed/
-│   ├── text_clean/
-│   ├── comments_clean/
-│   └── features_base/
-│
-└── gold/
-    ├── training_sets/
-    │   ├── tikharm_4class/
-    │   └── vn_safe_notsafe/
-    ├── inference_views/
-    └── analytics_views/
-```
-
----
-
-# 🎯 **6. Hướng dẫn chạy nhanh**
-
-```
+```bash
 docker-compose up -d
-python data-pipeline/kafka/producer/crawl_and_push.py
-spark-submit data-pipeline/spark-streaming/main_stream.py
-uvicorn model-serving/app/server:app
+```
+Access the services:
+- **Dashboard**: http://localhost:8501
+- **Airflow**: http://localhost:8081 (admin/admin)
+- **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
+- **Spark Master**: http://localhost:8080
+- **Model Serving**: http://localhost:8000/docs
+
+### 2. Run Offline Preprocessing & Training
+To prepare the data and train the models:
+
+```bash
+# 1. Run Preprocessing Pipeline (Extracts audio/video features)
+python offline_training/preprocessing/pipelines/preprocess_full_pipeline.py
+
+# 2. Pretrain on TikHarm dataset
+python offline_training/pretrain/train_tikharm.py
+
+# 3. Finetune on Vietnamese dataset
+python offline_training/finetune/train_tiktok_vn.py
+```
+
+### 3. Run Streaming, Serving & Dashboard
+To start the real-time detection flow:
+
+```bash
+# 1. Start Model Serving (FastAPI)
+uvicorn model-serving.app.server:app --reload --port 8000
+
+# 2. Start Spark Streaming Job
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
+    data-pipeline/spark-streaming/main_stream.py
+
+# 3. Start Dashboard
 streamlit run dashboard/app.py
 ```
 
+## 📂 Project Structure
+
+- `data-ingestion/`: Crawler and data upload scripts.
+- `data-pipeline/`: Kafka and Spark Streaming jobs.
+- `offline_training/`: Preprocessing, Training, and Model definitions.
+- `model-serving/`: Inference API.
+- `dashboard/`: Monitoring UI.
+- `deployment/`: Airflow DAGs and K8s configs.
