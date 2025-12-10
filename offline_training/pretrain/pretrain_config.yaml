@@ -5,6 +5,8 @@ model:
   text_dim: 768     # PhoBERT
   meta_dim: 22      # Numeric features count (excluding counts if dropped, ~22-25)
   fusion_dim: 768
+  fusion_heads: 8  # ✨ Added
+  fusion_layers: 2 # ✨ Added
   num_classes: 4    # Safe, Adult, Harmful, Suicide
   dropout: 0.1
 

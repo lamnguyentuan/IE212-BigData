@@ -1,17 +1,18 @@
 """
 Multimodal Classifier.
 
-Integrates Projections and Fusion to classify video content.
+# CHANGELOG: added cross-attention fusion
+Integrates Projections and Cross-Attention Fusion to classify video content.
 """
 
 import torch
 import torch.nn as nn
-from huggingface_hub import PyTorchModelHubMixin # ✨ Import Mixin
+from huggingface_hub import PyTorchModelHubMixin
 
 from .projections import ModelProjections
-from .fusion import FusionModule
+from .fusion import CrossModalFusion
 
-class MultimodalClassifier(nn.Module, PyTorchModelHubMixin): # ✨ Inherit
+class MultimodalClassifier(nn.Module, PyTorchModelHubMixin):
     def __init__(
         self,
         video_dim: int = 768,    # TimeSformer base
@@ -20,7 +21,9 @@ class MultimodalClassifier(nn.Module, PyTorchModelHubMixin): # ✨ Inherit
         meta_dim: int = 25,      # Normalized numeric features
         fusion_dim: int = 768,
         num_classes: int = 4,
-        dropout: float = 0.2
+        dropout: float = 0.2,
+        fusion_heads: int = 8,   # ✨ New
+        fusion_layers: int = 2   # ✨ New
     ):
         super().__init__()
         
@@ -33,9 +36,11 @@ class MultimodalClassifier(nn.Module, PyTorchModelHubMixin): # ✨ Inherit
             dropout=dropout
         )
         
-        self.fusion = FusionModule(
+        # ✨ Use CrossModalFusion
+        self.fusion = CrossModalFusion(
             embedding_dim=fusion_dim,
-            num_modalities=4, # V, A, T, M
+            num_heads=fusion_heads,
+            num_layers=fusion_layers,
             dropout=dropout
         )
         
@@ -65,11 +70,22 @@ class MultimodalClassifier(nn.Module, PyTorchModelHubMixin): # ✨ Inherit
         # 1. Project to common dim
         pv, pa, pt, pm = self.projections(video_emb, audio_emb, text_emb, meta_num)
         
-        # 2. Stack inputs for fusion: (B, 4, fusion_dim)
-        stack = torch.stack([pv, pa, pt, pm], dim=1)
+        # 2. Prepare for Cross-Attention
+        # We need Sequence Dimensions. 
+        # Since inputs are currently 1D vectors [B, D], we unsqueeze to [B, 1, D].
+        
+        # Query: Text + Metadata
+        q_text = pt.unsqueeze(1) # (B, 1, D)
+        q_meta = pm.unsqueeze(1) # (B, 1, D)
+        query = torch.cat([q_text, q_meta], dim=1) # (B, 2, D)
+        
+        # Key/Value: Video + Audio
+        k_video = pv.unsqueeze(1) # (B, 1, D)
+        k_audio = pa.unsqueeze(1) # (B, 1, D)
+        kv = torch.cat([k_video, k_audio], dim=1) # (B, 2, D)
         
         # 3. Fuse
-        fused = self.fusion(stack)
+        fused = self.fusion(query_emb=query, kv_emb=kv)
         
         # 4. Classify
         logits = self.classifier_head(fused)

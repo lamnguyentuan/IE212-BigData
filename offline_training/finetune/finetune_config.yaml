@@ -5,8 +5,10 @@ model:
   text_dim: 768
   meta_dim: 22
   fusion_dim: 768
-  num_classes: 2    # Negative (Safe), Positive (Harmful - binary task)
-  dropout: 0.2
+  fusion_heads: 8
+  fusion_layers: 2
+  num_classes: 2    # Safe, Not Safe
+  dropout: 0.1
 
 training:
   batch_size: 16

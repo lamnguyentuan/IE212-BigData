@@ -56,7 +56,9 @@ def train():
         meta_dim=model_cfg["meta_dim"],
         fusion_dim=model_cfg["fusion_dim"],
         num_classes=model_cfg["num_classes"],
-        dropout=model_cfg["dropout"]
+        dropout=model_cfg["dropout"],
+        fusion_heads=model_cfg.get("fusion_heads", 8),
+        fusion_layers=model_cfg.get("fusion_layers", 2)
     ).to(device)
 
     criterion = nn.CrossEntropyLoss()
