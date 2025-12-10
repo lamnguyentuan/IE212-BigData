@@ -1,6 +1,6 @@
 # System Architecture
 
-This document describes the high-level architecture of the **TikTok Harmful Content Detection** system. The system involves a detailed data pipeline from ingestion to model serving, leveraging a Medallion architecture (Bronze/Silver/Gold) on MinIO.
+This document describes the high-level architecture of the **TikTok Harmful Content Detection** system. The system involves a detailed data pipeline from ingestion to model serving, leveraging a Medallion architecture (Bronze/Silver/Gold) on MinIO and a **Cross-Attention Multimodal Model**.
 
 ## 1. High-Level Data Flow
 
@@ -84,6 +84,7 @@ Data is organized into three layers in MinIO (`tiktok-data` bucket):
 ### Pretraining
 - **Script**: `offline_training/pretrain/train_tikharm.py`
 - **Goal**: Train a 4-class classifier (Adult, Harmful, Safe, Suicide) on the TikHarm dataset.
+- **Model**: Cross-Attention Fusion (Text-Query, Video/Audio-Key/Value).
 - **Inputs**: Multimodal features from `gold/`.
 
 ### Finetuning

@@ -8,9 +8,11 @@ We utilize an **Early Fusion** architecture combining three modalities.
 Each modality (Video, Audio, Text, Metadata) is projected into a shared latent space (`feature_dim=768`) via linear layers and normalization.
 
 ### 2. Fusion Module (`fusion.py`)
-A **Self-Attention** mechanism (Transformer Encoder Layer) is used to fuse the projected embeddings.
-- Input: `[Batch, 4, 768]` (Sequence of 4 modalities)
-- Output: `[Batch, 4, 768]` -> Pooled to `[Batch, 768]`
+A **Cross-Attention** mechanism is used to fuse the projected embeddings.
+- **Query**: Text + Metadata features
+- **Key/Value**: Video + Audio features
+- **Architecture**: Stacked Multihead Attention layers followed by pooling.
+- **Output**: `[Batch, fusion_dim]` pooled vector ready for classification.
 
 ### 3. Classifier Head (`multimodal_classifier.py`)
 A Multi-Layer Perceptron (MLP) mapping the fused vector to class probabilities.
