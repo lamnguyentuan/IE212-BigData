@@ -27,7 +27,7 @@ spec:
         - name: MINIO_ROOT_USER
           value: "minioadmin"
         - name: MINIO_ROOT_PASSWORD
-          value: "minioadmin"
+          value: "12345678"
 ---
 apiVersion: v1
 kind: Service
