@@ -28,6 +28,13 @@ except Exception as e:
 async def run_crawl(hashtag):
     print(f"=== Starting Crawl for #{hashtag} ===")
     scraper = TikTokScraper()
+    # Patch config to use custom bucket if needed
+    bucket_env = os.getenv("MINIO_BUCKET")
+    if bucket_env:
+        scraper.bucket_name = bucket_env
+        scraper.minio_client.make_bucket(bucket_env) if not scraper.minio_client.bucket_exists(bucket_env) else None
+        print(f"[CRAWL] Switched to bucket: {bucket_env}")
+
     # Scrape 5 videos
     results = await scraper.scrape_hashtag(hashtag, max_videos=5)
     print(f"Crawled {len(results)} videos.")

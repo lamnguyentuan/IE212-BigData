@@ -24,7 +24,8 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKERS", "localhost:9092")
 TOPIC = os.getenv("KAFKA_TOPIC", "video_events")
 
 def get_video_ids_from_minio():
-    cfg = MinioConfig.from_env(bucket="tiktok-data")
+    bucket_name = os.getenv("MINIO_BUCKET", "tiktok-data")
+    cfg = MinioConfig.from_env(bucket=bucket_name)
     mc = MinioClientWrapper(cfg)
     # We use silver because we know features are there, but in real flow 
     # producer might come from bronze event. 

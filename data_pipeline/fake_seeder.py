@@ -12,7 +12,8 @@ sys.path.append(str(ROOT))
 from common.utils.minio_utils import MinioConfig, MinioClientWrapper
 
 def seed_fake_data(num_videos=5):
-    cfg = MinioConfig.from_env(bucket="tiktok-data")
+    bucket_name = os.getenv("MINIO_BUCKET", "tiktok-data")
+    cfg = MinioConfig.from_env(bucket=bucket_name)
     mc = MinioClientWrapper(cfg)
     
     print(f"Seeding {num_videos} fake videos to bucket '{cfg.bucket}'...")
