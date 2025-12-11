@@ -20,7 +20,9 @@ def get_minio_client(config_name: str = "config_tiktok.yaml"):
     with open(cfg_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
-    # Allow env var override for secret key
+    # Allow env var override for secret key and endpoint
+    endpoint = os.getenv("MINIO_ENDPOINT") or cfg["endpoint"]
+    access_key = os.getenv("MINIO_ACCESS_KEY") or cfg["access_key"]
     secret = os.getenv("MINIO_SECRET_KEY") or cfg.get("secret_key")
     
     if not secret:
@@ -30,8 +32,8 @@ def get_minio_client(config_name: str = "config_tiktok.yaml"):
         secret = "minioadmin"
 
     client = Minio(
-        cfg["endpoint"],
-        access_key=cfg["access_key"],
+        endpoint,
+        access_key=access_key,
         secret_key=secret,
         secure=cfg.get("secure", False),
     )

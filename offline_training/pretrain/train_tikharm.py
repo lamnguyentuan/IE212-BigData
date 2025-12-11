@@ -12,13 +12,13 @@ from tqdm import tqdm
 from sklearn.metrics import accuracy_score, f1_score
 
 # Paths
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
 
-from offline_training.utils.config_loader import load_yaml
-from offline_training.models.multimodal_classifier import MultimodalClassifier
+from common.utils.config_loader import load_yaml
+from common.models.multimodal_classifier import MultimodalClassifier
 from offline_training.datasets.multimodal_dataset import MultimodalDataset
-from offline_training.preprocessing.utils.logging_utils import get_logger
+from common.utils.logging_utils import get_logger
 
 logger = get_logger("pretrain-tikharm")
 

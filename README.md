@@ -1,66 +1,133 @@
-# TikTok Harmful Content Detection System
+# 🎥 TikTok Harmfulness Detection System (Real-time Big Data Pipeline)
 
-This project implements an end-to-end Big Data pipeline for detecting harmful content on TikTok. It utilizes a multimodal approach, analyzing video frames (TimeSformer), audio (Wav2Vec2), and metadata/text (ViSoBERT) to classify videos as Safe or Not Safe (covering Adult, Harmful, Suicide, etc.).
+**Hệ thống Phân tích & Phát hiện Nội dung Độc hại trên TikTok theo Thời gian thực**
 
-The system features:
-- **Crawling System**: Scrapes TikTok videos and uploads them to a Data Lake.
-- **Medallion Architecture**: Organizes data in MinIO (Bronze/Silver/Gold) for scalable processing.
-- **Offline Training**: Pretraining on the TikHarm dataset and Finetuning on Vietnamese TikTok data.
-- **Real-time Processing**: Spark Streaming pipeline for processing new videos via Kafka.
-- **Model Serving**: FastAPI service for real-time inference.
-- **Dashboard**: Streamlit app for monitoring and analytics.
+![Badge](https://img.shields.io/badge/Status-Active-success)
+![Docker](https://img.shields.io/badge/Docker-Enabled-blue)
+![Spark](https://img.shields.io/badge/Apache%20Spark-Streaming-orange)
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed view of the system components and data flow.
+Đồ án môn học **IE212 - Big Data**, tập trung xây dựng một hệ thống xử lý dữ liệu lớn đa phương thức (Video, Audio, Metadata) End-to-End từ khâu thu thập đến hiển thị cảnh báo.
 
-## 🚀 Quickstart
+---
 
-### 1. Run Local Stack (Infrastructure)
-Start the core services (MinIO, Kafka, Spark master, MongoDB, etc.) using Docker Compose:
+## 🏗️ Kiến trúc Hệ thống (System Architecture)
+
+Hệ thống được thiết kế theo mô hình **Lambda Architecture** (tập trung vào Speed Layer cho Real-time Demo), bao gồm các thành phần chính:
+
+1.  **Ingestion Layer (Thu thập)**
+    *   **Crawler (Playwright + Python)**: Tự động tương tác với TikTok Web, tải video `.mp4`, trích xuất metadata (comment, view, like).
+    *   **Apache Kafka**: Message Broker chịu tải cao, nhận sự kiện từ Crawler và phân phối đến bộ xử lý.
+
+2.  **Storage Layer (Lưu trữ)**
+    *   **MinIO (Data Lake)**: Lưu trữ dữ liệu phi cấu trúc (Unstructured Data) như Video, Audio, Features.
+    *   **MongoDB (NoSQL)**: Lưu trữ dữ liệu cấu trúc (Structured Data) như kết quả dự đoán, metadata, logs.
+
+3.  **Processing Layer (Xử lý)**
+    *   **Apache Spark Structured Streaming**: Xử lý dữ liệu thời gian thực từ Kafka.
+    *   **Multimodal Inference**:
+        *   **Video**: Trích xuất Frames -> TimeSformer Model.
+        *   **Audio**: Trích xuất Audio -> Wav2Vec2 Model.
+        *   **Fusion**: Kết hợp đặc trưng để phân loại `Safe` vs `Harmful`.
+    *   **Model Serving API**: Microservice (FastAPI+Uvicorn) cung cấp khả năng Inference độc lập.
+
+4.  **Orchestration Layer (Điều phối)**
+    *   **Apache Airflow**: Lập lịch tự động (Schedule) cho việc Crawling định kỳ hoặc Retrain model.
+
+5.  **Presentation Layer (Hiển thị)**
+    *   **Streamlit Dashboard**: Giao diện người dùng theo dõi Real-time, phát lại video, hiển thị biểu đồ thống kê.
+
+---
+
+## 🛠️ Yêu cầu Cài đặt (Prerequisites)
+
+*   **Docker & Docker Compose** (Bắt buộc)
+*   **Python 3.9+** (Nếu chạy script client)
+*   RAM: Tối thiểu 8GB (Khuyến nghị 16GB do chạy Spark & DL Models)
+
+---
+
+## 🚀 Hướng dẫn Chạy (Quick Start)
+
+### 1. Khởi động Hạ tầng (Infrastructure)
+
+Tại thư mục gốc của dự án:
 
 ```bash
-docker-compose up -d
+# Build images và khởi chạy services (Airflow, Spark, Kafka, MinIO, Dashboard...)
+docker-compose up -d --build
 ```
-Access the services:
-- **Dashboard**: http://localhost:8501
-- **Airflow**: http://localhost:8081 (admin/admin)
-- **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
-- **Spark Master**: http://localhost:8080
-- **Model Serving**: http://localhost:8000/docs
 
-### 2. Run Offline Preprocessing & Training
-To prepare the data and train the models:
+Đợi khoảng 2-5 phút để các image được build và services khởi động hoàn tất.
 
+### 2. Truy cập Giao diện Quản lý
+
+Nếu chạy trên máy cục bộ (Localhost):
+
+*   **Airflow**: [http://localhost:8081](http://localhost:8081) (Admin: `admin`/`admin`)
+*   **Dashboard**: [http://localhost:8501](http://localhost:8501)
+*   **Spark Master**: [http://localhost:8080](http://localhost:8080)
+*   **MinIO Console**: [http://localhost:9001](http://localhost:9001) (User: `minioadmin`/`minioadmin`)
+
+*(Nếu chạy trên Server/VPS, hãy sử dụng SSH Tunnel để forward các port này về máy cá nhân).*
+
+### 3. Demo Kịch bản End-to-End
+
+Để thấy dữ liệu chạy từ Crawler -> Dashboard, hãy làm theo các bước sau:
+
+#### Bước 1: Thu thập Dữ liệu (Trigger Crawl)
+Vào **Airflow UI** -> Kích hoạt DAG `tiktok_crawl_pipeline`.
+*hoặc chạy thủ công trong container:*
 ```bash
-# 1. Run Preprocessing Pipeline (Extracts audio/video features)
-python offline_training/preprocessing/pipelines/preprocess_full_pipeline.py
-
-# 2. Pretrain on TikHarm dataset
-python offline_training/pretrain/train_tikharm.py
-
-# 3. Finetune on Vietnamese dataset
-python offline_training/finetune/train_tiktok_vn.py
+docker exec crawler python data_pipeline/crawl_only.py review
 ```
 
-### 3. Run Streaming, Serving & Dashboard
-To start the real-time detection flow:
-
+#### Bước 2: Giả lập Luồng dữ liệu (Producer)
+Script này sẽ quét MinIO và gửi thông báo "New Video" tới Kafka.
 ```bash
-# 1. Start Model Serving (FastAPI)
-uvicorn model-serving.app.server:app --reload --port 8000
+# Cần cài venv ở máy host để chạy script này
+export MINIO_ENDPOINT="localhost:9009"
+export MINIO_ACCESS_KEY="minioadmin"
+export MINIO_SECRET_KEY="minioadmin"
 
-# 2. Start Spark Streaming Job
-spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
-    data-pipeline/spark-streaming/main_stream.py
-
-# 3. Start Dashboard
-streamlit run dashboard/app.py
+python data_pipeline/producer_simulator.py
 ```
 
-## 📂 Project Structure
+#### Bước 3: Xử lý & Dự đoán (Spark Streaming)
+Khởi chạy Spark Job để lắng nghe Kafka và gọi Model AI.
+```bash
+export MINIO_ENDPOINT="localhost:9009"
+export MINIO_ACCESS_KEY="minioadmin"
+export MINIO_SECRET_KEY="minioadmin"
+export MONGO_URI="mongodb://localhost:27017/"
 
-- `data-ingestion/`: Crawler and data upload scripts.
-- `data-pipeline/`: Kafka and Spark Streaming jobs.
-- `offline_training/`: Preprocessing, Training, and Model definitions.
-- `model-serving/`: Inference API.
-- `dashboard/`: Monitoring UI.
-- `deployment/`: Airflow DAGs and K8s configs.
+python data_pipeline/spark-streaming/main_stream.py --mode stream
+```
+
+**Kết quả:** Mở Dashboard tại `localhost:8501`, bạn sẽ thấy các video mới xuất hiện liên tục cùng nhãn dự đoán (Harmful/Safe)!
+
+---
+
+## 📂 Cấu trúc Dự án
+
+```
+.
+├── airflow/                 # Cấu hình & DAGs cho Airflow
+├── common/                  # Modules dùng chung (MinIO client, Features utils)
+├── dashboard/               # Mã nguồn Streamlit Dashboard (Dockerfile riêng)
+├── data_pipeline/           # Các script xử lý dữ liệu chính
+│   ├── producer_simulator.py  # Giả lập Kafka Producer
+│   ├── crawl_only.py          # Script Crawl gọn nhẹ
+│   └── spark-streaming/       # PySpark Streaming Job
+├── demo-crawl.Dockerfile    # Dockerfile cho Crawler Service
+├── docker-compose.yml       # File định nghĩa toàn bộ hạ tầng Docker
+├── model-serving/           # API Server cho AI Model (FastAPI)
+├── offline_training/        # Quy trình huấn luyện Model (Preprocessing)
+└── requirements.txt         # Các thư viện phụ thuộc
+```
+
+---
+
+## 👨‍💻 Tác giả
+
+Đồ án được thực hiện bởi nhóm sinh viên **IE212 - UIT**.
+Mọi góp ý xin gửi về [Issues](https://github.com/your-repo/issues).

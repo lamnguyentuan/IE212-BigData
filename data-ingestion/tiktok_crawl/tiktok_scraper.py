@@ -36,7 +36,7 @@ sys.path.append(str(ROOT / "minio"))
 
 from minio_client import get_minio_client, upload_file  # type: ignore
 from data_pipeline.utils.logger import get_logger
-from offline_training.utils.config_loader import load_yaml
+from common.utils.config_loader import load_yaml
 
 # Import check_duplicate logic if needed, or implement ensuring consistency
 # We will read/write to the same text file convention.

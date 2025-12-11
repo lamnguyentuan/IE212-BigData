@@ -1,0 +1,9 @@
+
+playwright==1.40.0
+minio
+pyyaml
+python-dotenv
+numpy
+requests
+yt-dlp
+fake-useragent

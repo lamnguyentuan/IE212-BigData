@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+import os
 from typing import List, Dict, Any
 import json
 import numpy as np
@@ -22,14 +23,14 @@ from offline_training.preprocessing.audio.audio_encoder_wav2vec import Wav2Vec2A
 from offline_training.preprocessing.video.video_frame_extractor import VideoFrameExtractor
 from offline_training.preprocessing.video.video_loader import VideoFrameLoader
 from offline_training.preprocessing.video.video_encoder_timesformer import TimeSformerVideoEncoder
-from offline_training.preprocessing.metadata.preprocessor import MetadataPreprocessor
-from offline_training.preprocessing.utils.minio_utils import MinioConfig, MinioClientWrapper
-from offline_training.preprocessing.utils.file_io import safe_rmtree
+from common.features.preprocessor import MetadataPreprocessor
+from common.utils.minio_utils import MinioConfig, MinioClientWrapper
+from common.utils.file_io import safe_rmtree
 
 # Feature Builders
-from offline_training.preprocessing.features.multimodal_feature_builder import MultimodalFeatureBuilder
+from common.features.multimodal_feature_builder import MultimodalFeatureBuilder
 from offline_training.preprocessing.features.feature_saver import FeatureSaver
-from offline_training.preprocessing.features.feature_schema import MultimodalFeatureRow
+from common.features.feature_schema import MultimodalFeatureRow
 
 logger = logging.getLogger("preprocess-full")
 logging.basicConfig(
@@ -39,9 +40,21 @@ logging.basicConfig(
 
 def _load_paths_config() -> dict:
     preprocessing_dir = Path(__file__).resolve().parents[1]
-    config_path = preprocessing_dir / "configs" / "paths.yaml"
+    
+    # Allow override via env var
+    env_config = os.getenv("PREPROCESS_CONFIG_PATH")
+    if env_config:
+        config_path = ROOT / env_config
+        if not config_path.exists():
+             # Try relative to preprocessing dir
+             config_path = preprocessing_dir / env_config
+    else:
+        config_path = preprocessing_dir / "configs" / "paths.yaml"
+
     if not config_path.exists():
         raise FileNotFoundError(f"paths.yaml not found at {config_path}")
+    
+    logger.info(f"Loading paths config from: {config_path}")
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
@@ -146,45 +159,59 @@ def run_preprocess_full() -> None:
             local_bronze_vid.mkdir(parents=True, exist_ok=True)
             local_silver_vid.mkdir(parents=True, exist_ok=True)
 
-            # Download
-            if minio_client:
-                minio_client.download_bronze_video(vid, base_dir) # Uses helper
+            # --- RESUME LOGIC ---
+            # Check if Silver already exists on MinIO
+            silver_exists = False
+            if minio_client and minio_client.check_silver_exists(vid):
+                logger.info(f"Silver exists for {vid}, downloading skipping extraction...")
+                try:
+                    minio_client.download_silver_files(vid, base_dir)
+                    silver_exists = True
+                except Exception as e:
+                    logger.warning(f"Failed to download silver for {vid}, re-processing: {e}")
             
-            # Audio
-            dst_video_path = local_bronze_vid / "video.mp4"
-            if not dst_video_path.exists():
-                logger.warning(f"Video file missing: {dst_video_path}")
-                continue
-
-            audio_path = audio_extractor.extract_audio_for_video(dst_video_path, local_silver_vid, vid)
-            if audio_path:
-                audio_emb = audio_encoder.encode_file(audio_path)
-                np.save(local_silver_vid / "audio_embedding.npy", audio_emb)
+            if silver_exists:
+                # SKIP EXTRACTION -> Jump to Row Build
+                # Need metadata json for Row Build if not in silver
+                pass 
             else:
-                # Handle missing audio (pad or skip)
-                pass
+                # --- EXTRACTION START ---
+                # Download Bronze
+                if minio_client:
+                    minio_client.download_bronze_video(vid, base_dir) 
+                
+                # Audio
+                dst_video_path = local_bronze_vid / "video.mp4"
+                if not dst_video_path.exists():
+                     logger.warning(f"Video file missing: {dst_video_path}")
+                     continue
 
-            # Video
-            frames_dir = local_silver_vid / "frames"
-            frames_dir.mkdir(parents=True, exist_ok=True)
-            frame_extractor.extract_frames(dst_video_path, frames_dir, vid)
-            frames_tensor = frame_loader.load_frames(frames_dir)
-            video_emb = video_encoder.encode(frames_tensor)
-            np.save(local_silver_vid / "video_embedding.npy", video_emb)
+                audio_path = audio_extractor.extract_audio_for_video(dst_video_path, local_silver_vid, vid)
+                if audio_path:
+                    audio_emb = audio_encoder.encode_file(audio_path)
+                    np.save(local_silver_vid / "audio_embedding.npy", audio_emb)
+                
+                # Video
+                frames_dir = local_silver_vid / "frames"
+                frames_dir.mkdir(parents=True, exist_ok=True)
+                frame_extractor.extract_frames(dst_video_path, frames_dir, vid)
+                frames_tensor = frame_loader.load_frames(frames_dir)
+                video_emb = video_encoder.encode(frames_tensor)
+                np.save(local_silver_vid / "video_embedding.npy", video_emb)
 
-            # Metadata
-            meta = metas_map.get(vid)
-            # fallback reload if not in map
-            if not meta and dst_meta_path.exists():
-                with open(dst_meta_path) as f: meta = json.load(f)
-            
-            if meta:
-                feats = meta_pre.transform_single(meta)
-                np.savez_compressed(local_silver_vid / "metadata_features.npz", **feats)
-            
-            # Upload Silver
-            if minio_client and upload_silver:
-                minio_client.upload_silver_dir(vid, base_dir)
+                # Metadata
+                meta = metas_map.get(vid)
+                if not meta and dst_meta_path.exists():
+                    with open(dst_meta_path) as f: meta = json.load(f)
+                
+                if meta:
+                    feats = meta_pre.transform_single(meta)
+                    np.savez_compressed(local_silver_vid / "metadata_features.npz", **feats)
+                
+                # Upload Silver
+                if minio_client and upload_silver:
+                    minio_client.upload_silver_dir(vid, base_dir)
+                # --- EXTRACTION END ---
 
             # --- BUILD ROW ---
             row = feature_builder.build_row_from_dir(vid, local_silver_vid, dst_meta_path)

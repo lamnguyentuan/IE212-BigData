@@ -11,12 +11,12 @@ import time
 from pathlib import Path
 from typing import Dict, Any
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
 
-from offline_training.preprocessing.features.multimodal_feature_builder import MultimodalFeatureBuilder
-from offline_training.preprocessing.features.feature_schema import MultimodalFeatureRow
+from common.features.multimodal_feature_builder import MultimodalFeatureBuilder
+from common.features.feature_schema import MultimodalFeatureRow
 from .schemas import PredictionRequest, PredictionResponse
 
 class InferenceEngine:
@@ -46,15 +46,28 @@ class InferenceEngine:
         vid = request.video_id
         silver_dir = self.feature_builder.silver_dir() / vid
         
-        if not silver_dir.exists():
-            # In a real system, we'd trigger a fetch from MinIO here if use_minio=True
-            if request.use_minio:
-                # TODO: Implement on-demand fetch using minio_utils
-                # For Phase 7 scope, we assume feature existence or simple error
-                raise FileNotFoundError(f"Features for {vid} not found locally in {silver_dir}")
-            else:
-                raise FileNotFoundError(f"Features for {vid} not found locally")
-        
+        if not silver_dir.exists() or not any(silver_dir.iterdir()):
+             # Try to fetch from MinIO
+             try:
+                 print(f"Fetching features for {vid} from MinIO...")
+                 from common.utils.minio_utils import MinioConfig, MinioClientWrapper
+                 # We assume bucket is tiktok-data for now, or load from env
+                 cfg = MinioConfig.from_env(bucket="tiktok-data")
+                 mc = MinioClientWrapper(cfg)
+                 
+                 # Download silver files using helper
+                 mc.download_silver_files(vid, self.feature_builder.base_dir)
+                 print(f"Downloaded silver files for {vid}.")
+                 
+             except Exception as e:
+                 if request.use_minio:
+                    # If explicitly requested and failed, raise error
+                    raise FileNotFoundError(f"Features for {vid} not found locally and MinIO fetch failed: {e}")
+                 else:
+                     # If use_minio=False (default in request), we still tried as fallback, but report local missing
+                     print(f"MinIO fallback failed: {e}")
+                     raise FileNotFoundError(f"Features for {vid} not found locally")
+
         row = self.feature_builder.build_row_from_dir(vid, silver_dir, None)
         if row is None:
              raise ValueError(f"Failed to build feature row for {vid}")

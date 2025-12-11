@@ -18,5 +18,5 @@ training:
   num_workers: 4
   
 data:
-  train_path: "tiktok-data/gold/multimodal_dataset.npz" # Placeholder, update if different
+  train_path: "tikharm_local/gold/multimodal_dataset.npz" # Start from local path
   val_split: 0.1

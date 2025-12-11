@@ -4,8 +4,8 @@ from typing import List, Optional
 import numpy as np
 import os
 
-from .feature_schema import MultimodalFeatureRow
-from ..utils.minio_utils import MinioConfig, MinioClientWrapper   # ✨ import MinIO wrapper
+from common.features.feature_schema import MultimodalFeatureRow
+from common.utils.minio_utils import MinioConfig, MinioClientWrapper   # ✨ import MinIO wrapper
 
 
 @dataclass

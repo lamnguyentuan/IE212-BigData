@@ -12,13 +12,13 @@ from tqdm import tqdm
 from sklearn.metrics import accuracy_score, f1_score, recall_score
 
 # Paths
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
 
-from offline_training.utils.config_loader import load_yaml
-from offline_training.models.multimodal_classifier import MultimodalClassifier
+from common.utils.config_loader import load_yaml
+from common.models.multimodal_classifier import MultimodalClassifier
 from offline_training.datasets.multimodal_dataset import MultimodalDataset
-from offline_training.preprocessing.utils.logging_utils import get_logger
+from common.utils.logging_utils import get_logger
 
 logger = get_logger("finetune-tiktok")
 
@@ -79,22 +79,19 @@ def train():
     else:
         logger.warning("Pretrain checkpoint not found. Training from scratch provided config.")
 
-    # Replace Head for 2 classes
-    num_ft_classes = int(model_cfg["num_classes"]) # 2
-    fusion_dim = model_cfg["fusion_dim"]
+    # ✨ REPLACE HEAD for 2 classes (Safe vs Not Safe)
+    # Original: fusion_dim -> 4
+    # New: fusion_dim -> 2
+    # The last layer of classifier_head is at index 3 (Dropout, Linear, GELU, Linear)
+    model.classifier_head[3] = nn.Linear(model_cfg["fusion_dim"] // 2, 2)
     
-    model.classifier_head = nn.Sequential(
-        nn.Dropout(model_cfg["dropout"]),
-        nn.Linear(fusion_dim, fusion_dim // 2),
-        nn.GELU(),
-        nn.Linear(fusion_dim // 2, num_ft_classes)
-    )
     model.to(device)
-
-    # 4. Optimizer
+    
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=float(train_cfg["lr"]), weight_decay=float(train_cfg["weight_decay"]))
     
+    num_ft_classes = int(model_cfg["num_classes"])
+
     epochs = int(train_cfg["epochs"])
 
     # 5. Loop
@@ -108,10 +105,9 @@ def train():
         for v, a, t, m, labels in pbar:
             v, a, t, m, labels = v.to(device), a.to(device), t.to(device), m.to(device), labels.to(device)
             
-            # Remap labels if necessary?
-            # Assuming dataset already has 0/1 for this task.
-            # If dataset mixes 4 classes, we might need mapping here. 
-            # For simplicity, assuming Phase 4 produced a binary dataset for Finetune or filtered it.
+            # Remap labels: SAFE(0)->0, NOT SAFE(2)->1
+            # We assume dataset only allows 0 and 2.
+            labels = (labels == 2).long()
             
             optimizer.zero_grad()
             logits = model(v, a, t, m)
@@ -130,6 +126,10 @@ def train():
         with torch.no_grad():
             for v, a, t, m, labels in val_loader:
                 v, a, t, m, labels = v.to(device), a.to(device), t.to(device), m.to(device), labels.to(device)
+                
+                # Remap labels
+                labels = (labels == 2).long()
+
                 logits = model(v, a, t, m)
                 preds = torch.argmax(logits, dim=1)
                 val_preds.extend(preds.cpu().numpy())

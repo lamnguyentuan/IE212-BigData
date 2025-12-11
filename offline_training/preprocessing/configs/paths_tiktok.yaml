@@ -1,0 +1,14 @@
+# Config for processing "tiktok-data" bucket (Unlabeled / Raw)
+# This data will be labeled as Safe/Not Safe later
+
+data_root: "tiktok-data_local"
+
+bronze_subdir: "bronze"
+silver_subdir: "silver"
+gold_subdir: "gold"
+
+use_minio: true
+upload_silver: true
+upload_gold: true 
+minio_bucket: "tiktok-data" # Target Bucket
+video_ids: []            

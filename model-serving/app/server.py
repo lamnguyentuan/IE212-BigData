@@ -9,6 +9,9 @@ import torch
 from .schemas import PredictionRequest, PredictionResponse
 from .load_model import load_finetuned_model
 from .inference import InferenceEngine
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="TikTok Harmful Content Detection API")
 

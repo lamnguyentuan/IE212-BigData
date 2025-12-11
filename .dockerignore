@@ -1,0 +1,11 @@
+
+venv/
+.git/
+tiktok-data/
+tiktok-data_local/
+tikharm_local/
+minio-data/
+mongo-data/
+__pycache__/
+*.pyc
+.env

@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(ROOT))
 
-from offline_training.models.multimodal_classifier import MultimodalClassifier
+from common.models.multimodal_classifier import MultimodalClassifier
 
 class TestMultimodalModel(unittest.TestCase):
     def test_forward_pass_shapes(self):

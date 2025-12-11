@@ -36,7 +36,7 @@ services:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     ports:
-      - "9000:9000" # API
+      - "9009:9000" # API
       - "9001:9001" # Console Web UI
     command: server /data --console-address ":9001"
     volumes:
@@ -54,23 +54,26 @@ services:
   # 2. Processing Layer (Spark)
   # -----------------------------------
 
+  # Spark Cluster (apache/spark)
   spark-master:
-    image: bitnami/spark:3.5.0
+    image: apache/spark:3.5.0
     container_name: spark-master
     environment:
       - SPARK_MODE=master
     ports:
       - "8080:8080"
       - "7077:7077"
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
 
   spark-worker:
-    image: bitnami/spark:3.5.0
+    image: apache/spark:3.5.0
     container_name: spark-worker
     environment:
       - SPARK_MODE=worker
       - SPARK_MASTER_URL=spark://spark-master:7077
     depends_on:
       - spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
 
   # -----------------------------------
   # 3. Application Layer
@@ -91,12 +94,13 @@ services:
       - minio
 
   dashboard:
-    image: python:3.9-slim
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
     container_name: dashboard
     working_dir: /app
     volumes:
       - .:/app
-    command: streamlit run dashboard/app.py --server.address=0.0.0.0 --server.port=8501
     ports:
       - "8501:8501"
     environment:
@@ -108,6 +112,20 @@ services:
       - mongodb
       - minio
 
+  crawler:
+    build:
+      context: .
+      dockerfile: demo-crawl.Dockerfile
+    container_name: crawler
+    volumes:
+      - .:/app
+    environment:
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    depends_on:
+      - minio
+
   # -----------------------------------
   # 4. Orchestration (Airflow - Simplified)
   # -----------------------------------
@@ -117,10 +135,11 @@ services:
     container_name: airflow
     environment:
       - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
-      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////root/airflow/airflow.db
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
     volumes:
       - ./deployment/airflow/dags:/opt/airflow/dags
+      - /var/run/docker.sock:/var/run/docker.sock # For DockerOperator
     ports:
       - "8081:8080"
-    command: bash -c "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com && airflow webserver --port 8080 -D && airflow scheduler"
+    command: bash -c "pip install apache-airflow-providers-docker && airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com && airflow webserver --port 8080 -D && airflow scheduler"

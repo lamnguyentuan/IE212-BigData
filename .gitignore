@@ -1,100 +1,51 @@
-# Python Cache
+# Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
+*$py.class
 *.so
-*.ipynb_checkpoints/
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# virtual env
-env/
+# Virtual Environment
 venv/
-.genai-env/
-.genai-env*/
-genai-env/
+env/
+ENV/
+.env
 
-# Playwright + Chromium cache
-playwright/.cache/
-playwright/python/.cache/
-browser_contexts/
-playwright-report/
-test-results/
-webkit/
-chromium/
-ffmpeg/
+# IntelliJ / VSCode
+.idea/
+.vscode/
+*.swp
+*.swo
 
-# Logs
-logs/
-*.log
-
-# MinIO local storage
+# Project Data & Logs
 minio-data/
-
-# Large data / Outputs / Temporary data
-
-offline_training/artifacts/
-
-
-tmp/
+mongo-data/
+tiktok-data/
+tiktok-data_local/
+tikharm_local/
 tmp_downloads/
-temp/
-tmp_*/
-
+tmp_seed/
+logs/
 exports/
+downloaded_videos.txt
+nohup.out
+simulated_predictions.jsonl
 
-# TikTok cookies or credentials
-cookies-tiktok.txt
-*.cookies.txt
-*.token
-*.secrets
-*.env
-.env*
-
-
-# OS garbage
+# OS
 .DS_Store
 Thumbs.db
-desktop.ini
-
-# Editor / IDE files
-.vscode/
-.idea/
-*.iml
-*.sublime-project
-*.sublime-workspace
-
-# Spark / Hadoop / Kafka generated files
-spark-warehouse/
-metastore_db/
-derby.log
-*.crc
-*.avro.tmp
-*.parquet.crc
-data-pipeline/tmp/
-data-pipeline/checkpoints/
-data-pipeline/spark-streaming/checkpoints/
-
-# Docker
-*.pid
-*.pid.lock
-*.sock
-docker/logs/
-
-# Node / UI (if dashboard uses extra front-end libs)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-
-# Model weights (too big to commit)
-*.pt
-*.pth
-*.ckpt
-*.bin
-model-serving/artifacts/
-offline-training/artifacts/
-
-tikharm_local
-tiktik-data_local!
-!offline_training/datasets/

@@ -9,12 +9,12 @@ import yaml
 from huggingface_hub import hf_hub_download
 
 # Paths
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 # Ensure we can import offline_training
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))
 
-from offline_training.models.multimodal_classifier import MultimodalClassifier
+from common.models.multimodal_classifier import MultimodalClassifier
 
 def load_finetuned_model(
     config_path: str = None, 
@@ -57,14 +57,15 @@ def load_finetuned_model(
     #   c) Pull from HF Hub (funa21/tiktok-vn-finetune)
     
     if checkpoint_path is None:
-        local_default = ROOT / "offline_training/artifacts/finetune/finetuned_best.pt"
+        # Look in local model_store
+        local_default = ROOT / "model-serving/model_store/finetuned_best.pt"
         if local_default.exists():
             checkpoint_path = str(local_default)
         else:
             try:
                 print("Local checkpoint not found, downloading from HF Hub...")
-                checkpoint_path = hf_hub_download(repo_id="funa21/tiktok-vn-finetune", filename="pytorch_model.bin") 
-                # Note: PyTorchModelHubMixin usually saves as pytorch_model.bin or similar.
+                checkpoint_path = hf_hub_download(repo_id="funa21/tiktok-vn-finetune", filename="model.safetensors") 
+                # Note: Newer push_to_hub uses safetensors by default
                 # If our custom push used a different name, we might need to adjust.
                 # Standard save_pretrained uses config.json + pytorch_model.bin
                 # But our custom push in Phase 6 used push_to_hub(..., commit_message...) on class inheriting mixin.
@@ -73,7 +74,11 @@ def load_finetuned_model(
                 print(f"Failed to download from Hub: {e}")
                 
     if checkpoint_path and Path(checkpoint_path).exists():
-        state_dict = torch.load(checkpoint_path, map_location=device)
+        if str(checkpoint_path).endswith(".safetensors"):
+             from safetensors.torch import load_file
+             state_dict = load_file(checkpoint_path, device=device_str)
+        else:
+             state_dict = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(state_dict)
         print(f"Loaded weights from {checkpoint_path}")
     else:

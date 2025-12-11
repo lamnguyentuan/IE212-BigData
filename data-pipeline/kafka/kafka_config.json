@@ -1,6 +1,0 @@
-{
-  "bootstrap_servers": "localhost:9092",
-  "topic_name": "video_events",
-  "consumer_group": "spark_streaming_group",
-  "auto_offset_reset": "earliest"
-}

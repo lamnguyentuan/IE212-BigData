@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir \
 # Copy the entire project for import resolution (since we reference offline_training)
 # Ideally, we package offline_training, but direct copy works for mono-repo style deployment
 COPY offline_training /app/offline_training
+COPY common /app/common
 COPY model-serving /app/model-serving
 
 # Environment variables

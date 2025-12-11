@@ -15,7 +15,7 @@ from playwright.async_api import Page, async_playwright
 # =========================
 # Thiết lập ROOT, để import minio_client
 # =========================
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parent
 sys.path.append(str(ROOT / "minio"))
 from minio_client import get_minio_client  # type: ignore
 
@@ -58,6 +58,8 @@ class TikTokScraper:
         # - Tổng (level1 + level2) tối đa 200
         # - Mỗi comment level1 tối đa 15 reply (level2)
         self.MAX_TOTAL_COMMENTS: int = int(self.cfg.get("max_total_comments", 200))
+        self.HEADLESS: bool = bool(self.cfg.get("headless", True))
+
         self.MAX_REPLIES_PER_COMMENT: int = int(
             self.cfg.get("max_replies_per_comment", 15)
         )
@@ -572,7 +574,7 @@ class TikTokScraper:
             return None
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False)
+            browser = await p.chromium.launch(headless=self.HEADLESS)
             context = await browser.new_context(
                 viewport=self.VIEWPORT,
                 user_agent=self.USER_AGENT,
@@ -667,7 +669,7 @@ class TikTokScraper:
         - Nếu video_id đã có trong downloaded_videos.txt thì SKIP
         """
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False)
+            browser = await p.chromium.launch(headless=self.HEADLESS)
             context = await browser.new_context(
                 viewport=self.VIEWPORT,
                 user_agent=self.USER_AGENT,

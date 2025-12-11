@@ -17,4 +17,4 @@ training:
   weight_decay: 1e-2
   
 data:
-  train_path: "tiktok-data/gold/multimodal_dataset.npz" 
+  train_path: "tiktok-data_local/gold/multimodal_dataset.npz" 

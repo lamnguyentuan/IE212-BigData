@@ -1,0 +1,12 @@
+
+# Crawler Configuration
+headless: true
+download_video: true
+max_videos_per_hashtag: 3
+max_total_comments: 50
+max_replies_per_comment: 5
+
+# Kafka (Optional / Disabled for End-to-End Demo script)
+kafka_producer_enabled: false
+kafka_brokers: "localhost:9092"
+kafka_topic: "video_events"
