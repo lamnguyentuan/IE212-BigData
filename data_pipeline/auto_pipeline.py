@@ -79,6 +79,7 @@ class AutoPipeline:
 
     def _init_processors(self):
         logger.info("Initializing Models & Processors (This may take a moment)...")
+        logger.info("⏳ Loading Wav2Vec2, TimeSformer, and PhoBERT. Please wait approx 1-2 minutes...")
         self.audio_extractor = AudioExtractor(sample_rate=16000)
         self.audio_encoder = Wav2Vec2AudioEncoder(model_name="nguyenvulebinh/wav2vec2-base-vietnamese-250h")
         self.frame_extractor = VideoFrameExtractor(num_frames=16, frame_size=(224, 224))
@@ -110,6 +111,10 @@ class AutoPipeline:
             upload_gold=True,
             minio_bucket=MINIO_BUCKET
         )
+        
+        # Signal readiness
+        Path("/tmp/pipeline_ready").touch()
+        logger.info("✅ Models Loaded. Pipeline is READY! (/tmp/pipeline_ready created)")
 
     def _fit_scaler(self):
         # Quick hack: list some bronze metadata to fit
@@ -188,10 +193,16 @@ class AutoPipeline:
             # 2. Extract Features (Audio, Video, Meta) -> Silver
             
             # Audio
-            audio_path = self.audio_extractor.extract_audio_for_video(video_path, local_silver, vid)
-            if audio_path:
-                audio_emb = self.audio_encoder.encode_file(audio_path)
-                np.save(local_silver / "audio_embedding.npy", audio_emb)
+            try:
+                audio_path = self.audio_extractor.extract_audio_for_video(video_path, local_silver, vid)
+                if audio_path:
+                    audio_emb = self.audio_encoder.encode_file(audio_path)
+                    np.save(local_silver / "audio_embedding.npy", audio_emb)
+            except Exception as e:
+                logger.warning(f"Audio extraction failed for {vid} (using dummy zeros): {e}")
+                # Create dummy embedding (zeros) to allow pipeline to continue
+                dummy_emb = np.zeros(self.audio_encoder.hidden_size, dtype=np.float32)
+                np.save(local_silver / "audio_embedding.npy", dummy_emb)
             
             # Video
             frames_dir = local_silver / "frames"

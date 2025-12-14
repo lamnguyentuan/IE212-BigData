@@ -72,7 +72,10 @@ with col_table:
         df_display = pd.DataFrame(recent_preds)
         
         # Select/Rename cols
-        cols_to_show = ["video_id", "label", "confidence", "ingested_at"]
+        df_display["minio_link"] = df_display["video_id"].apply(
+            lambda x: f"http://localhost:9001/browser/tiktok-realtime/bronze/{x}/video.mp4"
+        )
+        cols_to_show = ["video_id", "label", "confidence", "ingested_at", "minio_link"]
         df_show = df_display[cols_to_show].copy()
         
         # Interactive Selection
@@ -82,7 +85,23 @@ with col_table:
             use_container_width=True,
             on_select="rerun", # Streamlit 1.35+ feature
             selection_mode="single-row",
-            hide_index=True
+            hide_index=True,
+            column_config={
+                "minio_link": st.column_config.LinkColumn(
+                    "MinIO Raw",
+                    display_text="🔗 View in Console"
+                ),
+                "confidence": st.column_config.ProgressColumn(
+                    "Confidence",
+                    format="%.2f",
+                    min_value=0,
+                    max_value=1
+                ),
+                "ingested_at": st.column_config.DatetimeColumn(
+                    "Time",
+                    format="HH:mm:ss"
+                )
+            }
         )
         
         # If row selected, show video player below

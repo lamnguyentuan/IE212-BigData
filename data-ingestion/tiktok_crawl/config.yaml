@@ -67,7 +67,7 @@ hashtags:                     # Danh sách hashtag để crawl
 max_videos_per_hashtag: 20    # Mỗi hashtag crawl bao nhiêu video
 
 # ====== MinIO Settings ======
-minio_config: "config_tiktok.yaml"
+minio_config: "minio/config_realtime.yaml"
 
 # ====== Output ======
 export_dir: "exports"
