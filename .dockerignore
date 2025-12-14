@@ -9,3 +9,6 @@ mongo-data/
 __pycache__/
 *.pyc
 .env
+tikharm_downloads/
+tmp_downloads/
+offline_training/artifacts/

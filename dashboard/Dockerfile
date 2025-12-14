@@ -4,7 +4,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir streamlit pandas altair pymongo python-dotenv
+RUN pip install --no-cache-dir streamlit pandas altair pymongo python-dotenv minio
 
 COPY . /app
 

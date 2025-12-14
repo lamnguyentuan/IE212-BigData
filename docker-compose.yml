@@ -36,11 +36,11 @@ services:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     ports:
-      - "9009:9000" # API
+      - "9000:9000" # API
       - "9001:9001" # Console Web UI
     command: server /data --console-address ":9001"
     volumes:
-      - ./minio-data:/data
+      - 9d85c43669a7197e4d7734b03e1a73efbc7d7bba2a7c0d361d3411bce5eb9c72:/data
 
   mongodb:
     image: mongo:6.0
@@ -90,6 +90,7 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=tiktok-realtime
     depends_on:
       - minio
 
@@ -143,3 +144,7 @@ services:
     ports:
       - "8081:8080"
     command: bash -c "pip install apache-airflow-providers-docker && airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com && airflow webserver --port 8080 -D && airflow scheduler"
+
+volumes:
+  9d85c43669a7197e4d7734b03e1a73efbc7d7bba2a7c0d361d3411bce5eb9c72:
+    external: true

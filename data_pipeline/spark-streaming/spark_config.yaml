@@ -17,5 +17,3 @@ spark:
   # Generic Spark Conf
   spark_conf:
     "spark.jars.packages": "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.2.1"
-    "spark.sql.extensions": "io.delta.sql.DeltaSparkSessionExtension"
-    "spark.sql.catalog.spark_catalog": "org.apache.spark.sql.delta.catalog.DeltaCatalog"

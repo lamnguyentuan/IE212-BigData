@@ -9,8 +9,10 @@ import pandas as pd
 from datetime import datetime
 from typing import Optional, List, Dict
 
+import os
+
 # Config - Ideally load from env or central config
-MONGO_URI = "mongodb://localhost:27017/"
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 DB_NAME = "tiktok_harm_db"
 COLLECTION_NAME = "predictions"
 

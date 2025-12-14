@@ -27,6 +27,9 @@ def load_finetuned_model(
 
     # 1. Config
     # If not provided, try to find default finetune config
+    import os
+    if config_path is None:
+        config_path = os.getenv("CONFIG_PATH")
     if config_path is None:
         config_path = ROOT / "offline_training/finetune/finetune_config.yaml"
     
@@ -57,21 +60,31 @@ def load_finetuned_model(
     #   c) Pull from HF Hub (funa21/tiktok-vn-finetune)
     
     if checkpoint_path is None:
-        # Look in local model_store
+        checkpoint_path = os.getenv("CHECKPOINT_PATH")
+
+    if checkpoint_path is None:
+        # Check if user wants a specific HF Repo
+        hf_repo = os.getenv("HF_HUB_REPO", "funa21/tiktok-vn-finetune")
+        
+        # Look in local model_store first only if env var not forcing HF
         local_default = ROOT / "model-serving/model_store/finetuned_best.pt"
-        if local_default.exists():
+        
+        # If explicitly requested HF or local doesn't exist
+        force_hf = os.getenv("FORCE_HF_DOWNLOAD", "false").lower() == "true"
+        
+        if not force_hf and local_default.exists():
             checkpoint_path = str(local_default)
+            print(f"Using local checkpoint: {checkpoint_path}")
         else:
             try:
-                print("Local checkpoint not found, downloading from HF Hub...")
-                checkpoint_path = hf_hub_download(repo_id="funa21/tiktok-vn-finetune", filename="model.safetensors") 
-                # Note: Newer push_to_hub uses safetensors by default
-                # If our custom push used a different name, we might need to adjust.
-                # Standard save_pretrained uses config.json + pytorch_model.bin
-                # But our custom push in Phase 6 used push_to_hub(..., commit_message...) on class inheriting mixin.
-                # It should be standard.
+                print(f"Downloading model from HF Hub: {hf_repo}...")
+                checkpoint_path = hf_hub_download(repo_id=hf_repo, filename="model.safetensors") 
             except Exception as e:
                 print(f"Failed to download from Hub: {e}")
+                # Fallback to local if exists and we tried HF
+                if local_default.exists():
+                    print("Fallback to local checkpoint.")
+                    checkpoint_path = str(local_default)
                 
     if checkpoint_path and Path(checkpoint_path).exists():
         if str(checkpoint_path).endswith(".safetensors"):

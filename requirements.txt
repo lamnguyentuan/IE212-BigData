@@ -11,3 +11,4 @@ pyyaml
 opencv-python
 soundfile
 minio
+huggingface_hub

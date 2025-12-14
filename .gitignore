@@ -32,7 +32,21 @@ ENV/
 *.swp
 *.swo
 
-# Project Data & Logs
+# Large Media & Data Files
+*.mp4
+*.wav
+*.parquet
+*.pt
+*.pth
+
+# Numpy archives (Ignore all, but keep specific)
+*.npz
+!evaluation/dataset_tiktok_real_verified.npz
+
+# Reports
+REPORT_*.md
+
+# Directories to Ignore
 minio-data/
 mongo-data/
 tiktok-data/
@@ -42,10 +56,26 @@ tmp_downloads/
 tmp_seed/
 logs/
 exports/
-downloaded_videos.txt
+offline_training/tests/
+
+# Misc
 nohup.out
 simulated_predictions.jsonl
 
 # OS
 .DS_Store
 Thumbs.db
+
+.venv/
+batches.json
+cookies-tiktok.txt
+downloaded_videos.txt
+check_bad_videos.py
+cloudflared-linux-amd64.deb
+check_minio_data.py
+test.py
+tikharm_downloads/
+upload_to_hf.py
+offline_training/preprocessing/tiktok_label_second.json
+find_lost_volume.py
+requirements-auto.txt

@@ -4,6 +4,7 @@ import json
 import logging
 import random
 import sys
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -58,7 +59,13 @@ class TikTokScraper:
         # - Tổng (level1 + level2) tối đa 200
         # - Mỗi comment level1 tối đa 15 reply (level2)
         self.MAX_TOTAL_COMMENTS: int = int(self.cfg.get("max_total_comments", 200))
-        self.HEADLESS: bool = bool(self.cfg.get("headless", True))
+        # Headless mode: Env var > Config > Default True
+        env_headless = os.getenv("HEADLESS")
+        if env_headless is not None:
+             self.HEADLESS = env_headless.lower() == "true"
+        else:
+             self.HEADLESS = bool(self.cfg.get("headless", True))
+
 
         self.MAX_REPLIES_PER_COMMENT: int = int(
             self.cfg.get("max_replies_per_comment", 15)
@@ -107,7 +114,10 @@ class TikTokScraper:
         # 3. Kết nối MinIO
         # -------------------------------------------------
         minio_cfg_file = self.cfg.get("minio_config", "config_tiktok.yaml")
+        # Ensure secure=False for docker environment
+        os.environ["MINIO_SECURE"] = "False"
         self.minio_client, self.bucket_name = get_minio_client(minio_cfg_file)
+
 
         # -------------------------------------------------
         # 4. Load danh sách video đã xử lý
@@ -285,7 +295,7 @@ class TikTokScraper:
                 total_nodes = await page.evaluate(
                     """
                     () => {
-                        const nodes = document.querySelectorAll('span[data-e2e^="comment-level"]');
+                        const nodes = document.querySelectorAll('[data-e2e^="comment-level"]');
                         return nodes.length;
                     }
                     """
@@ -308,7 +318,7 @@ class TikTokScraper:
         # Chờ ít nhất 1 comment top-level
         try:
             await page.wait_for_selector(
-                'span[data-e2e*="comment-level-1"]', timeout=self.TIMEOUT
+                '[data-e2e*="comment-level-1"]', timeout=self.TIMEOUT
             )
         except Exception:
             logging.error("No top-level comments found after scrolling.")
@@ -328,7 +338,7 @@ class TikTokScraper:
                     const MAX_REPLIES = {max_replies};
 
                     const nodes = Array.from(
-                        document.querySelectorAll('span[data-e2e^="comment-level"]')
+                        document.querySelectorAll('[data-e2e^="comment-level"]')
                     );
                     const tree = [];
                     let current = null;
@@ -401,7 +411,7 @@ class TikTokScraper:
         logging.info(f"Extracting info from: {video_url}")
 
         try:
-            await page.goto(video_url, wait_until="networkidle")
+            await page.goto(video_url, wait_until="domcontentloaded")
             await self._random_sleep()
             await self._handle_captcha(page)
 
@@ -618,8 +628,17 @@ class TikTokScraper:
         hashtag_url = f"https://www.tiktok.com/tag/{hashtag_clean}"
         logging.info(f"Opening hashtag page: {hashtag_url}")
 
-        await page.goto(hashtag_url, wait_until="networkidle")
+        await page.goto(hashtag_url, wait_until="domcontentloaded")
         await self._random_sleep()
+        
+        # --- Pause for Manual CAPTCHA Solving ---
+        if not self.HEADLESS:
+            print("\n" + "="*50)
+            print("Action Required: Please solve the CAPTCHA in the browser window.")
+            print("Make sure video thumbnails are visible.")
+            input("Press ENTER here after you have solved the CAPTCHA...")
+            print("="*50 + "\n")
+        
         await self._handle_captcha(page)
 
         collected_urls: Set[str] = set()

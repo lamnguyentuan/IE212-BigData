@@ -21,9 +21,13 @@ def run_cmd(cmd: list[str], timeout: float = 300.0):
         ) from e
 
     if proc.returncode != 0:
+        err_msg = proc.stderr.decode('utf-8', errors='ignore')
+        if "Output file does not contain any stream" in err_msg:
+             raise ValueError("Input file contains no video stream (likely audio-only or slideshow).")
+        
         raise RuntimeError(
             f"Command failed ({proc.returncode}): {' '.join(cmd)}\n"
-            f"stderr: {proc.stderr.decode('utf-8', errors='ignore')}"
+            f"stderr: {err_msg}"
         )
 
 

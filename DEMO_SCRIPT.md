@@ -1,85 +1,94 @@
-# 🎬 KỊCH BẢN DEMO ĐỒ ÁN BIG DATA (Real-time Pipeline)
+# DEMO SCRIPT - TIKTOK HARMFUL CONTENT DETECTION
 
-**Dự án**: TikTok Harmfulness Detection System
-**Người trình bày**: [Tên bạn]
+Hướng dẫn chạy demo tự động hoàn toàn từ crawl -> preprocessing -> inference -> dashboard.
 
----
+## 1. Chuẩn bị môi trường
 
-## 🟢 PHẦN 0: CHUẨN BỊ (Làm trước khi thầy gọi)
+Mở 3 terminal riêng biệt tại thư mục dự án:
+`cd /home/funalee/UIT/IE104/project/IE212-BigData`
 
-1.  **Mở 3 cửa sổ Terminal riêng biệt** (để chạy 3 thành phần của hệ thống).
-2.  **Mở trình duyệt với 4 Tabs sau**:
-    *   **Dashboard**: `http://localhost:8501` (Trang chính hiển thị kết quả)
-    *   **Airflow**: `http://localhost:8081` (Quản lý luồng)
-    *   **MinIO**: `http://localhost:9001` -> Vào Bucket `tiktok-realtime`.
-    *   **Slide báo cáo** (Nếu có).
+### Terminal 1: Infrastructure & Services
+Khởi động MinIO, Kafka, Mongo, Model Serving, Dashboard.
 
----
-
-## 🎬 PHẦN 1: THU THẬP DỮ LIỆU (Ingestion)
-*Mục tiêu: Chứng minh hệ thống lấy được dữ liệu thật từ TikTok.*
-
-**🗣 Lời dẫn**:
-*"Thưa thầy, hệ thống bắt đầu bằng việc thu thập dữ liệu thời gian thực. Em sẽ kích hoạt Crawler để lấy các video mới nhất theo từ khóa `#review` và lưu vào Bucket demo riêng là `tiktok-realtime`."*
-
-**Youtube/Terminal 1 (Chạy Crawler)**:
 ```bash
-docker exec -e MINIO_BUCKET="tiktok-realtime" crawler python data_pipeline/crawl_only.py review
+# 1. Tắt các container cũ để sạch sẽ
+docker-compose down
+
+# 2. Cấu hình Model Serving (Quan trọng: Bucket mới & Model Funa)
+export MINIO_BUCKET="tiktok-realtime"
+export MODEL_CHECKPOINT_PATH=""  # Để trống để auto-load từ HF hoặc local cache
+export HF_HUB_REPO="funa21/tiktok-vn-finetune"
+
+# 3. Khởi động
+docker-compose up -d
+
+# 4. Kiểm tra
+docker ps
+# Đảm bảo model-serving, kafka, minio, dashboard đều UP.
 ```
 
-*   **Hành động**: Chuyển ngay sang Tab **MinIO**.
-*   **Quan sát**: Sau khoảng 10-15s, thầy sẽ thấy các folder video mới xuất hiện trong bucket `tiktok-realtime/bronze`.
-*   **Chốt**: *"Dữ liệu thô (Video MP4 + Metadata) đã được tải thành công về Data Lake."*
+## 2. Terminal 2: Automated Pipeline (Orchestrator)
+Script này sẽ ngồi canh MinIO. Hễ có video mới (Bronze) là tự động xử lý -> Silver -> Gold -> Kafka.
 
----
-
-## 🚀 PHẦN 2: XỬ LÝ & PHÂN TÍCH (Processing)
-*Mục tiêu: Chứng minh dữ liệu chảy qua Kafka và được Spark + AI Model xử lý.*
-
-**🗣 Lời dẫn**:
-*"Ngay khi có video mới, hệ thống sẽ đẩy sự kiện vào Kafka. Spark Streaming sẽ đón nhận luồng dữ liệu này để xử lý và gọi AI Model dự đoán xem video có độc hại hay không."*
-
-**Terminal 2 (Chạy Producer - Giả lập sự kiện từ Crawler)**:
 ```bash
-export MINIO_ENDPOINT="localhost:9009"
-export MINIO_ACCESS_KEY="minioadmin"
-export MINIO_SECRET_KEY="minioadmin"
+# Export bucket name
 export MINIO_BUCKET="tiktok-realtime"
 
-venv/bin/python data_pipeline/producer_simulator.py
-```
+# Cài đặt thư viện cần thiết (Chỉ chạy lần đầu)
+pip install -r data_pipeline/requirements-auto.txt
 
-**Terminal 3 (Chạy Spark - Bộ xử lý trung tâm)**:
+# Chạy pipeline tự động
+python3 data_pipeline/auto_pipeline.py
+```
+*Chờ đến khi thấy log: `👀 Start watching MinIO for new Bronze videos...`*
+
+## 3. Terminal 3: Spark Inference & Dashboard
+Khởi động Spark Streaming để lắng nghe Kafka và đẩy kết quả ra Dashboard.
+
 ```bash
-export MINIO_ENDPOINT="localhost:9009"
-export MINIO_ACCESS_KEY="minioadmin"
-export MINIO_SECRET_KEY="minioadmin"
-export MONGO_URI="mongodb://localhost:27017/"
+# Export config
+export MINIO_BUCKET="tiktok-realtime"
+export KAFKA_TOPIC="video_events"
 
-venv/bin/python data_pipeline/spark-streaming/main_stream.py --mode stream
+# Submit Spark Job
+# Lưu ý: --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.2 (đã có trong container hoặc submit local)
+# Nếu chạy local:
+python data_pipeline/spark-streaming/main_stream.py --mode stream
 ```
 
-*   **Quan sát**: Bạn sẽ thấy Logs chạy liên tục ở Terminal 3: `Processing batch...`, `Result: Safe (0.98)...`
-*   **Chốt**: *"Spark đang xử lý từng lô dữ liệu (Micro-batch), tích hợp Model Multimodal để đưa ra kết quả phân loại."*
+*Nếu chạy bằng Docker (đã up ở bước 1):*
+```bash
+docker-compose exec spark-master python /app/data_pipeline/spark-streaming/main_stream.py --mode stream
+```
 
----
+## 4. Chạy Demo (Terminal 4 hoặc Terminal hiện tại)
+Bây giờ mọi thứ đã sẵn sàng. Hãy crawl một video mới.
 
-## 📊 PHẦN 3: HIỂN THỊ KẾT QUẢ (Dashboard)
-*Mục tiêu: Show kết quả End-to-End cho người dùng cuối.*
+```bash
+export MINIO_BUCKET="tiktok-realtime"
+# Crawl hashtag #review (để crawl ít video demo)
+python data_pipeline/crawl_only.py review
+```
 
-**🗣 Lời dẫn**:
-*"Kết quả phân tích cuối cùng được hiển thị trực quan trên Dashboard quản trị."*
+## Quy trình tự động sẽ diễn ra như sau:
+1.  **Crawler**: Tải video -> Upload lên MinIO `tiktok-realtime/bronze`.
+2.  **Auto Pipeline** (Terminal 2):
+    - Phát hiện video mới.
+    - Tải về local.
+    - Trích xuất Audio (Wav2Vec2), Video (TimeSformer), Metadata.
+    - Save `silver` (features).
+    - Save `gold` (dataset row).
+    - **Bắn tin nhắn sang Kafka**.
+3.  **Spark** (Terminal 3):
+    - Nhận tin nhắn từ Kafka.
+    - Gọi API Model Serving (localhost:8000).
+    - Model Serving tải feature từ MinIO (nếu cần) hoặc nhận vector.
+    - Trả về kết quả (Safe/Harmful).
+    - Spark lưu vào MongoDB.
+4.  **Dashboard**:
+    - Truy cập: http://localhost:8501
+    - Dữ liệu mới sẽ tự động hiển thị (Refresh nếu cần).
 
-**Hành động**:
-1.  Chuyển sang Tab **Dashboard** (`localhost:8501`).
-2.  Bấm nút **"Refresh Data"** ở thanh bên trái.
-3.  Chỉ vào biểu đồ và bảng **"Recent Alerts"**.
-4.  **Click vào một dòng bất kỳ** trong bảng danh sách.
-5.  Video Player sẽ hiện ra và phát video đó.
-
-**Chốt**: *"Thầy có thể thấy hệ thống đã phát hiện video này là [Safe/Harmful] với độ tin cậy [X%]. Video được stream trực tiếp từ MinIO Server để kiểm chứng."*
-
----
-
-## ✅ KẾT THÚC DEMO
-*"Đó là toàn bộ luồng dữ liệu End-to-End của nhóm em. Cảm ơn thầy đã theo dõi."*
+## Troubleshooting
+- **Lỗi model not found**: Kiểm tra log `docker logs model-serving`. Đảm bảo nó đã tải được model `funa21`.
+- **Lỗi Kafka**: Đảm bảo `auto_pipeline.py` in ra "Event sent to Kafka".

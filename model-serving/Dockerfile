@@ -10,8 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy root-level requirements if available, else standard
 # Assuming dependencies are manageable. Pytorch CPU is usually best for non-GPU serving unless specified.
 # For simplicity, installing manually common libs.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir \
-    torch \
     numpy \
     pydantic \
     fastapi \
@@ -19,7 +20,8 @@ RUN pip install --no-cache-dir \
     pyyaml \
     huggingface_hub \
     transformers \
-    minio 
+    minio \
+    python-dotenv
 # Add other requirements from project if needed
 
 # Copy the entire project for import resolution (since we reference offline_training)

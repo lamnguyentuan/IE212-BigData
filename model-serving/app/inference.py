@@ -51,8 +51,9 @@ class InferenceEngine:
              try:
                  print(f"Fetching features for {vid} from MinIO...")
                  from common.utils.minio_utils import MinioConfig, MinioClientWrapper
-                 # We assume bucket is tiktok-data for now, or load from env
-                 cfg = MinioConfig.from_env(bucket="tiktok-data")
+                 import os
+                 bucket_name = os.getenv("MINIO_BUCKET", "tiktok-data")
+                 cfg = MinioConfig.from_env(bucket=bucket_name)
                  mc = MinioClientWrapper(cfg)
                  
                  # Download silver files using helper
